@@ -19,6 +19,7 @@ class SyncQueueManager {
 
   Future<void> initialize() async {
     await loadQueue();
+    await pruneOldSyncedTasks();
     processQueue();
   }
 
@@ -33,7 +34,7 @@ class SyncQueueManager {
         tasksNotifier.value = [];
       }
     } catch (e) {
-      debugPrint('Error loading sync queue: ');
+      debugPrint('Error loading sync queue: ' + e.toString());
     }
   }
 
@@ -43,7 +44,27 @@ class SyncQueueManager {
       final data = jsonEncode(tasksNotifier.value.map((e) => e.toJson()).toList());
       await prefs.setString(_currentQueueKey, data);
     } catch (e) {
-      debugPrint('Error persisting sync queue: ');
+      debugPrint('Error persisting sync queue: ' + e.toString());
+    }
+  }
+
+  /// Automatically prune synced tasks older than 24 hours to prevent unbounded local storage growth
+  Future<void> pruneOldSyncedTasks({Duration maxAge = const Duration(hours: 24)}) async {
+    final now = DateTime.now();
+    final current = tasksNotifier.value;
+
+    final retained = current.where((task) {
+      if (task.status == SyncStatus.synced) {
+        final age = now.difference(task.createdAt);
+        return age < maxAge;
+      }
+      return true;
+    }).toList();
+
+    if (retained.length != current.length) {
+      debugPrint('Pruned ' + (current.length - retained.length).toString() + ' old synced tasks from local queue.');
+      tasksNotifier.value = retained;
+      await _persistQueue();
     }
   }
 
@@ -68,7 +89,7 @@ class SyncQueueManager {
     final index = current.indexWhere((t) => t.id == taskId);
     if (index != -1) {
       final updated = List<SyncTask>.from(current);
-      updated[index] = updated[index].copyWith(status: SyncStatus.pending, errorMessage: null);
+      updated[index] = updated[index].copyWith(status: SyncStatus.pending, clearError: true);
       tasksNotifier.value = updated;
       await _persistQueue();
       processQueue();
@@ -98,11 +119,11 @@ class SyncQueueManager {
               await ApiRepository.syncBillPayload(task.payload);
             }
 
-            tasks[i] = task.copyWith(status: SyncStatus.synced);
+            tasks[i] = task.copyWith(status: SyncStatus.synced, clearError: true);
             tasksNotifier.value = List.from(tasks);
             await _persistQueue();
           } catch (err) {
-            debugPrint('Failed to sync task: ');
+            debugPrint('Failed to sync task: ' + err.toString());
             tasks[i] = task.copyWith(status: SyncStatus.failed, errorMessage: err.toString());
             tasksNotifier.value = List.from(tasks);
             await _persistQueue();
@@ -111,6 +132,7 @@ class SyncQueueManager {
       }
     } finally {
       _isProcessing = false;
+      pruneOldSyncedTasks();
     }
   }
 }

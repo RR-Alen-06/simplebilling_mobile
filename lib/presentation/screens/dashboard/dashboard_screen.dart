@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
+import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
+import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
 import 'package:simplebilling_mobile/data/models/dashboard_stats_model.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
@@ -19,7 +21,7 @@ class DashboardScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Shop Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Store Overview', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
@@ -38,6 +40,90 @@ class DashboardScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Real-time Cloud Sync Alert Banner
+                ValueListenableBuilder<List<SyncTask>>(
+                  valueListenable: SyncQueueManager.instance.tasksNotifier,
+                  builder: (context, tasks, child) {
+                    final failedTasks = tasks.where((t) => t.status == SyncStatus.failed).toList();
+                    final pendingTasks = tasks.where((t) => t.status == SyncStatus.pending || t.status == SyncStatus.syncing).toList();
+
+                    if (failedTasks.isNotEmpty) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.cloud_off, color: AppColors.error, size: 28),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    ' Transaction(s) Failed to Sync!',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.error, fontSize: 14),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Text(
+                                    'Bills are safe in local storage. Tap to retry cloud upload.',
+                                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.error,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              icon: const Icon(Icons.refresh, size: 16),
+                              label: const Text('Retry Now'),
+                              onPressed: () => SyncQueueManager.instance.processQueue(),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    if (pendingTasks.isNotEmpty) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Syncing  pending bill(s) to cloud...',
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return const SizedBox.shrink();
+                  },
+                ),
+
                 // Top Metric Cards Grid
                 GridView.count(
                   crossAxisCount: 2,
@@ -52,7 +138,7 @@ class DashboardScreen extends ConsumerWidget {
                       Formatters.currency(stats.todaysSales),
                       Icons.today,
                       AppColors.primary,
-                      '${stats.todaysBillsCount} bills generated',
+                      ' bills generated',
                     ),
                     _buildStatCard(
                       'Monthly Sales',
@@ -141,7 +227,7 @@ class DashboardScreen extends ConsumerWidget {
                             children: [
                               const Text('Total Customers', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                               const SizedBox(height: 4),
-                              Text('${stats.totalCustomers}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                              Text('', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
                             ],
                           ),
                         ),
@@ -178,7 +264,7 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Center(child: Text('Error loading stats: $e')),
+        error: (e, s) => Center(child: Text('Error loading stats: ')),
       ),
     );
   }
