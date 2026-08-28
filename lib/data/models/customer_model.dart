@@ -1,4 +1,4 @@
-class CustomerModel {
+﻿class CustomerModel {
   final String id;
   final String? userId;
   final String? customerCode;
@@ -7,6 +7,7 @@ class CustomerModel {
   final double advanceBalance;
   final double loyaltyPoints;
   final String? createdAt;
+  final String? clientRef;
 
   CustomerModel({
     required this.id,
@@ -17,6 +18,7 @@ class CustomerModel {
     this.advanceBalance = 0.0,
     this.loyaltyPoints = 0.0,
     this.createdAt,
+    this.clientRef,
   });
 
   factory CustomerModel.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class CustomerModel {
       advanceBalance: (json['advance_balance'] as num?)?.toDouble() ?? 0.0,
       loyaltyPoints: (json['loyalty_points'] as num?)?.toDouble() ?? 0.0,
       createdAt: json['created_at'] as String?,
+      clientRef: json['client_ref'] as String?,
     );
   }
 
@@ -42,6 +45,7 @@ class CustomerModel {
       'advance_balance': advanceBalance,
       'loyalty_points': loyaltyPoints,
       if (createdAt != null) 'created_at': createdAt,
+      if (clientRef != null) 'client_ref': clientRef,
     };
   }
 }

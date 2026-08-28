@@ -26,10 +26,13 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
     super.dispose();
   }
 
-  SyncStatus _getBillSyncStatus(String billNumber, List<SyncTask> tasks) {
+  SyncStatus _getBillSyncStatus(String? clientRef, String id, String billNumber, List<SyncTask> tasks) {
     for (final task in tasks) {
       if (task.action == 'create_bill') {
-        final taskBillNum = task.payload['billData']?['bill_number'];
+        if ((clientRef != null && task.clientRef == clientRef) || task.id == id || task.clientRef == id) {
+          return task.status;
+        }
+        final taskBillNum = task.payload['billData']?['bill_number'] ?? task.payload['bill_number'];
         if (taskBillNum == billNumber) {
           return task.status;
         }
@@ -131,7 +134,7 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
                       separatorBuilder: (context, index) => const SizedBox(height: 10),
                       itemBuilder: (ctx, idx) {
                         final bill = filtered[idx];
-                        final syncStatus = _getBillSyncStatus(bill.billNumber, tasks);
+                        final syncStatus = _getBillSyncStatus(bill.clientRef, bill.id, bill.billNumber, tasks);
                                                 return Card(
                           elevation: 0,
                           shape: RoundedRectangleBorder(

@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
 import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
 import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
@@ -27,11 +28,10 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
     super.dispose();
   }
 
-  SyncStatus _getProductSyncStatus(String name, String category, List<SyncTask> tasks) {
+  SyncStatus _getProductSyncStatus(String? clientRef, String id, List<SyncTask> tasks) {
     for (final task in tasks) {
       if (task.action == 'create_product') {
-        final payload = task.payload;
-        if (payload['name'] == name && payload['category'] == category) {
+        if ((clientRef != null && task.clientRef == clientRef) || task.id == id || task.clientRef == id) {
           return task.status;
         }
       }
@@ -86,12 +86,19 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                 final price = double.tryParse(priceCtrl.text) ?? 0.0;
                 if (name.isEmpty || price < 0) return;
 
-                // Enqueue create_product task
-                await SyncQueueManager.instance.enqueueTask('create_product', {
-                  'name': name,
-                  'category': category,
-                  'price': price,
-                });
+                final clientRef = const Uuid().v4();
+
+                // Enqueue create_product task with unique client_ref
+                await SyncQueueManager.instance.enqueueTask(
+                  'create_product',
+                  {
+                    'client_ref': clientRef,
+                    'name': name,
+                    'category': category,
+                    'price': price,
+                  },
+                  clientRef: clientRef,
+                );
 
                 if (mounted) {
                   ref.invalidate(productsProvider);
@@ -166,7 +173,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                       separatorBuilder: (c, i) => const SizedBox(height: 10),
                       itemBuilder: (ctx, idx) {
                         final p = filtered[idx];
-                        final syncStatus = _getProductSyncStatus(p.name, p.category, tasks);
+                        final syncStatus = _getProductSyncStatus(p.clientRef, p.id, tasks);
 
                         return Card(
                           elevation: 0,

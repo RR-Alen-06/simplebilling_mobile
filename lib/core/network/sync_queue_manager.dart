@@ -1,6 +1,7 @@
 ﻿import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import 'package:simplebilling_mobile/core/network/supabase_client.dart';
 import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
@@ -11,6 +12,7 @@ class SyncQueueManager {
 
   final ValueNotifier<List<SyncTask>> tasksNotifier = ValueNotifier<List<SyncTask>>([]);
   bool _isProcessing = false;
+  static const _uuid = Uuid();
 
   String get _currentQueueKey {
     final uid = SupabaseConfig.client.auth.currentUser?.id ?? 'guest';
@@ -68,11 +70,24 @@ class SyncQueueManager {
     }
   }
 
-  Future<SyncTask> enqueueTask(String action, Map<String, dynamic> payload) async {
+  SyncStatus getStatusForClientRef(String clientRef) {
+    for (final task in tasksNotifier.value) {
+      if (task.clientRef == clientRef) {
+        return task.status;
+      }
+    }
+    return SyncStatus.synced;
+  }
+
+  Future<SyncTask> enqueueTask(String action, Map<String, dynamic> payload, {String? clientRef}) async {
+    final ref = clientRef ?? payload['client_ref'] as String? ?? _uuid.v4();
+    final enrichedPayload = Map<String, dynamic>.from(payload)..['client_ref'] = ref;
+
     final task = SyncTask(
       id: 'task_' + DateTime.now().millisecondsSinceEpoch.toString(),
       action: action,
-      payload: payload,
+      clientRef: ref,
+      payload: enrichedPayload,
       status: SyncStatus.pending,
       createdAt: DateTime.now(),
     );

@@ -1,11 +1,12 @@
-class ExpenseModel {
+﻿class ExpenseModel {
   final String id;
   final String? userId;
   final String? expenseNumber;
   final String title;
   final double amount;
-  final String category; // 'Shop Expense' | 'Electricity' | 'Rent' | 'Other Expense'
+  final String category;
   final String createdAt;
+  final String? clientRef;
 
   ExpenseModel({
     required this.id,
@@ -15,6 +16,7 @@ class ExpenseModel {
     required this.amount,
     this.category = 'Shop Expense',
     required this.createdAt,
+    this.clientRef,
   });
 
   factory ExpenseModel.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class ExpenseModel {
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       category: json['category'] as String? ?? 'Shop Expense',
       createdAt: json['created_at'] as String? ?? DateTime.now().toIso8601String(),
+      clientRef: json['client_ref'] as String?,
     );
   }
 
@@ -37,6 +40,7 @@ class ExpenseModel {
       'amount': amount,
       'category': category,
       'created_at': createdAt,
+      if (clientRef != null) 'client_ref': clientRef,
     };
   }
 }

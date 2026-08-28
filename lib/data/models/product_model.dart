@@ -1,4 +1,4 @@
-class ProductModel {
+﻿class ProductModel {
   final String id;
   final String? userId;
   final String? productCode;
@@ -6,6 +6,7 @@ class ProductModel {
   final String category;
   final double price;
   final String? createdAt;
+  final String? clientRef;
 
   ProductModel({
     required this.id,
@@ -15,6 +16,7 @@ class ProductModel {
     this.category = 'General',
     required this.price,
     this.createdAt,
+    this.clientRef,
   });
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class ProductModel {
       category: json['category'] as String? ?? 'General',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       createdAt: json['created_at'] as String?,
+      clientRef: json['client_ref'] as String?,
     );
   }
 
@@ -38,6 +41,7 @@ class ProductModel {
       'category': category,
       'price': price,
       if (createdAt != null) 'created_at': createdAt,
+      if (clientRef != null) 'client_ref': clientRef,
     };
   }
 }

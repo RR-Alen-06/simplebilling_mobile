@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
 import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
 import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
@@ -22,11 +23,10 @@ class ExpensesScreen extends ConsumerStatefulWidget {
 }
 
 class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
-  SyncStatus _getExpenseSyncStatus(String title, double amount, String category, List<SyncTask> tasks) {
+  SyncStatus _getExpenseSyncStatus(String? clientRef, String id, List<SyncTask> tasks) {
     for (final task in tasks) {
       if (task.action == 'create_expense') {
-        final payload = task.payload;
-        if (payload['title'] == title && payload['amount'] == amount && payload['category'] == category) {
+        if ((clientRef != null && task.clientRef == clientRef) || task.id == id || task.clientRef == id) {
           return task.status;
         }
       }
@@ -81,12 +81,19 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 final amount = double.tryParse(amountCtrl.text) ?? 0.0;
                 if (title.isEmpty || amount <= 0) return;
 
-                // Enqueue create_expense task
-                await SyncQueueManager.instance.enqueueTask('create_expense', {
-                  'title': title,
-                  'amount': amount,
-                  'category': category,
-                });
+                final clientRef = const Uuid().v4();
+
+                // Enqueue create_expense task with unique client_ref
+                await SyncQueueManager.instance.enqueueTask(
+                  'create_expense',
+                  {
+                    'client_ref': clientRef,
+                    'title': title,
+                    'amount': amount,
+                    'category': category,
+                  },
+                  clientRef: clientRef,
+                );
 
                 if (mounted) {
                   ref.invalidate(expensesListProvider);
@@ -165,7 +172,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                       separatorBuilder: (c, i) => const SizedBox(height: 10),
                       itemBuilder: (ctx, idx) {
                         final e = expenses[idx];
-                        final syncStatus = _getExpenseSyncStatus(e.title, e.amount, e.category, tasks);
+                        final syncStatus = _getExpenseSyncStatus(e.clientRef, e.id, tasks);
 
                         return Card(
                           elevation: 0,

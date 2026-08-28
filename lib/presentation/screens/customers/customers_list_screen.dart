@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
 import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
 import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
@@ -24,11 +25,10 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
     super.dispose();
   }
 
-  SyncStatus _getCustomerSyncStatus(String name, String? mobile, List<SyncTask> tasks) {
+  SyncStatus _getCustomerSyncStatus(String? clientRef, String id, List<SyncTask> tasks) {
     for (final task in tasks) {
       if (task.action == 'create_customer') {
-        final payload = task.payload;
-        if (payload['name'] == name && payload['mobile'] == mobile) {
+        if ((clientRef != null && task.clientRef == clientRef) || task.id == id || task.clientRef == id) {
           return task.status;
         }
       }
@@ -80,13 +80,20 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
               final advance = double.tryParse(advanceCtrl.text) ?? 0.0;
               if (name.isEmpty) return;
 
-              // Enqueue create_customer task
-              await SyncQueueManager.instance.enqueueTask('create_customer', {
-                'name': name,
-                'mobile': mobile,
-                'advance_balance': advance,
-                'loyalty_points': 0.0,
-              });
+              final clientRef = const Uuid().v4();
+
+              // Enqueue create_customer task with unique client_ref
+              await SyncQueueManager.instance.enqueueTask(
+                'create_customer',
+                {
+                  'client_ref': clientRef,
+                  'name': name,
+                  'mobile': mobile,
+                  'advance_balance': advance,
+                  'loyalty_points': 0.0,
+                },
+                clientRef: clientRef,
+              );
 
               if (mounted) {
                 ref.invalidate(customersProvider);
@@ -160,7 +167,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                       separatorBuilder: (context, index) => const SizedBox(height: 10),
                       itemBuilder: (ctx, idx) {
                         final cust = filtered[idx];
-                        final syncStatus = _getCustomerSyncStatus(cust.name, cust.mobile, tasks);
+                        final syncStatus = _getCustomerSyncStatus(cust.clientRef, cust.id, tasks);
 
                         return Card(
                           elevation: 0,
