@@ -58,7 +58,7 @@ class BillingSettings {
     this.billPrefix = 'INV',
     this.billFormat = 'PREFIX-YYYYMM-SEQ',
     this.defaultPaymentMethod = 'Cash',
-    this.currencySymbol = '₹',
+    this.currencySymbol = 'Rs.',
     this.decimalPrecision = 2,
     this.gstEnabled = false,
     this.gstRate = 18.0,
@@ -72,7 +72,7 @@ class BillingSettings {
       billPrefix: json['bill_prefix'] as String? ?? 'INV',
       billFormat: json['bill_format'] as String? ?? 'PREFIX-YYYYMM-SEQ',
       defaultPaymentMethod: json['default_payment_method'] as String? ?? 'Cash',
-      currencySymbol: json['currency_symbol'] as String? ?? '₹',
+      currencySymbol: json['currency_symbol'] as String? ?? 'Rs.',
       decimalPrecision: (json['decimal_precision'] as num?)?.toInt() ?? 2,
       gstEnabled: json['gst_enabled'] as bool? ?? false,
       gstRate: (json['gst_rate'] as num?)?.toDouble() ?? 18.0,
@@ -166,5 +166,13 @@ class AllSettings {
       billing: BillingSettings.fromJson(json['billing'] as Map<String, dynamic>? ?? {}),
       loyalty: LoyaltySettings.fromJson(json['loyalty'] as Map<String, dynamic>? ?? {}),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'shop': shop.toJson(),
+      'billing': billing.toJson(),
+      'loyalty': loyalty.toJson(),
+    };
   }
 }

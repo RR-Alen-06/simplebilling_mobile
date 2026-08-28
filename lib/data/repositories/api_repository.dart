@@ -1,130 +1,78 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/network/supabase_client.dart';
-import '../../core/utils/rounding_engine.dart';
-import '../models/customer_model.dart';
-import '../models/product_model.dart';
-import '../models/bill_model.dart';
-import '../models/expense_model.dart';
-import '../models/audit_log_model.dart';
-import '../models/settings_model.dart';
-import '../models/dashboard_stats_model.dart';
+import 'package:simplebilling_mobile/core/network/supabase_client.dart';
+import 'package:simplebilling_mobile/core/utils/rounding_engine.dart';
+import 'package:simplebilling_mobile/data/models/audit_log_model.dart';
+import 'package:simplebilling_mobile/data/models/bill_model.dart';
+import 'package:simplebilling_mobile/data/models/customer_model.dart';
+import 'package:simplebilling_mobile/data/models/dashboard_stats_model.dart';
+import 'package:simplebilling_mobile/data/models/expense_model.dart';
+import 'package:simplebilling_mobile/data/models/product_model.dart';
+import 'package:simplebilling_mobile/data/models/settings_model.dart';
 
 class ApiRepository {
-  ApiRepository._();
+  static final _client = SupabaseConfig.client;
 
-  static SupabaseClient get _client => SupabaseConfig.client;
+  static String _getUserKey(String baseKey) {
+    final uid = _client.auth.currentUser?.id ?? 'guest';
+    return 'printpro-state:' + uid + ':' + baseKey;
+  }
 
-  // ----------------------------------------------------
-  // AUTH HELPER & CACHING SCOPE
-  // ----------------------------------------------------
-  static String? get currentUserId => _client.auth.currentUser?.id;
-  static bool get isAuthenticated => _client.auth.currentUser != null;
-
+  // --- AUTHENTICATION ---
   static Future<void> signOut() async {
-    final prefs = await SharedPreferences.getInstance();
-    final uid = currentUserId ?? 'guest';
-    await prefs.remove('printpro-state:$uid');
-    await _client.auth.signOut();
-  }
-
-  // ----------------------------------------------------
-  // SETTINGS
-  // ----------------------------------------------------
-  static Future<AllSettings> getSettings() async {
     try {
-      final response = await _client.from('settings').select().maybeSingle();
-      if (response != null && response['value'] != null) {
-        final val = response['value'];
-        Map<String, dynamic> data = val is String ? jsonDecode(val) : Map<String, dynamic>.from(val);
-        return AllSettings.fromJson(data);
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      final uid = _client.auth.currentUser?.id;
+      if (uid != null) {
+        for (final k in keys) {
+          if (k.startsWith('printpro-state:' + uid)) {
+            await prefs.remove(k);
+          }
+        }
       }
+      await _client.auth.signOut();
     } catch (e) {
-      debugPrint('Error loading settings from Supabase, checking cache: $e');
+      debugPrint('Error signing out: ');
     }
-
-    final prefs = await SharedPreferences.getInstance();
-    final uid = currentUserId ?? 'default';
-    final localJson = prefs.getString('printpro-state:$uid:settings');
-    if (localJson != null) {
-      try {
-        return AllSettings.fromJson(jsonDecode(localJson));
-      } catch (_) {}
-    }
-
-    return AllSettings(
-      shop: ShopSettings(),
-      billing: BillingSettings(),
-      loyalty: LoyaltySettings(),
-    );
   }
 
-  static Future<void> saveSettings(AllSettings settings) async {
-    final data = {
-      'shop': settings.shop.toJson(),
-      'billing': settings.billing.toJson(),
-      'loyalty': settings.loyalty.toJson(),
-    };
-    try {
-      await _client.from('settings').upsert({
-        'key': 'ALL_SETTINGS',
-        'value': data,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      debugPrint('Error saving settings to Supabase: $e');
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    final uid = currentUserId ?? 'default';
-    await prefs.setString('printpro-state:$uid:settings', jsonEncode(data));
-  }
-
-  // ----------------------------------------------------
-  // CUSTOMERS
-  // ----------------------------------------------------
+  // --- CUSTOMERS ---
   static Future<List<CustomerModel>> getCustomers() async {
     try {
-      final response = await _client
-          .from('customers')
-          .select()
-          .order('name', ascending: true);
-      return (response as List).map((e) => CustomerModel.fromJson(e)).toList();
+      final response = await _client.from('customers').select('*').order('created_at', ascending: false);
+      return (response as List).map((json) => CustomerModel.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('Error getting customers: $e');
+      debugPrint('Error fetching customers: ');
       return [];
     }
   }
 
-  static Future<CustomerModel?> createCustomer(String name, String mobile) async {
+  static Future<CustomerModel?> createCustomer(String name, String? mobile, {double initialAdvance = 0.0}) async {
     try {
       final response = await _client.from('customers').insert({
-        'name': name.trim(),
-        'mobile': mobile.trim().isEmpty ? null : mobile.trim(),
-        'advance_balance': 0.0,
-        'loyalty_points': 0.0,
+        'name': name,
+        'mobile': mobile,
+        'advance_balance': initialAdvance,
+        'loyalty_points': 0,
       }).select().single();
+
+      await logAudit(action: 'CREATE_CUSTOMER', entity: 'Customer ', newValue: 'Advance: ');
       return CustomerModel.fromJson(response);
     } catch (e) {
-      debugPrint('Error creating customer: $e');
+      debugPrint('Error creating customer: ');
       return null;
     }
   }
 
-  // ----------------------------------------------------
-  // PRODUCTS & INVENTORY
-  // ----------------------------------------------------
+  // --- PRODUCTS ---
   static Future<List<ProductModel>> getProducts() async {
     try {
-      final response = await _client
-          .from('products')
-          .select()
-          .order('name', ascending: true);
-      return (response as List).map((e) => ProductModel.fromJson(e)).toList();
+      final response = await _client.from('products').select('*').order('name', ascending: true);
+      return (response as List).map((json) => ProductModel.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('Error getting products: $e');
+      debugPrint('Error fetching products: ');
       return [];
     }
   }
@@ -132,39 +80,37 @@ class ApiRepository {
   static Future<ProductModel?> createProduct(String name, String category, double price) async {
     try {
       final response = await _client.from('products').insert({
-        'name': name.trim(),
-        'category': category.trim(),
+        'name': name,
+        'category': category,
         'price': price,
       }).select().single();
+
+      await logAudit(action: 'CREATE_PRODUCT', entity: 'Product ', newValue: 'Price: ');
       return ProductModel.fromJson(response);
     } catch (e) {
-      debugPrint('Error creating product: $e');
+      debugPrint('Error creating product: ');
       return null;
     }
   }
 
-  static Future<bool> deleteProduct(String productId) async {
+  static Future<bool> deleteProduct(String id) async {
     try {
-      await _client.from('products').delete().eq('id', productId);
+      await _client.from('products').delete().eq('id', id);
+      await logAudit(action: 'DELETE_PRODUCT', entity: 'Product ID ');
       return true;
     } catch (e) {
-      debugPrint('Error deleting product: $e');
+      debugPrint('Error deleting product: ');
       return false;
     }
   }
 
-  // ----------------------------------------------------
-  // EXPENSES
-  // ----------------------------------------------------
+  // --- EXPENSES ---
   static Future<List<ExpenseModel>> getExpenses() async {
     try {
-      final response = await _client
-          .from('expenses')
-          .select()
-          .order('created_at', ascending: false);
-      return (response as List).map((e) => ExpenseModel.fromJson(e)).toList();
+      final response = await _client.from('expenses').select('*').order('created_at', ascending: false);
+      return (response as List).map((json) => ExpenseModel.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('Error getting expenses: $e');
+      debugPrint('Error fetching expenses: ');
       return [];
     }
   }
@@ -172,106 +118,152 @@ class ApiRepository {
   static Future<ExpenseModel?> createExpense(String title, double amount, String category) async {
     try {
       final response = await _client.from('expenses').insert({
-        'title': title.trim(),
+        'title': title,
         'amount': amount,
         'category': category,
       }).select().single();
+
+      await logAudit(action: 'CREATE_EXPENSE', entity: title, newValue: 'Amount: ');
       return ExpenseModel.fromJson(response);
     } catch (e) {
-      debugPrint('Error creating expense: $e');
+      debugPrint('Error creating expense: ');
       return null;
     }
   }
 
-  static Future<bool> deleteExpense(String expenseId) async {
+  static Future<bool> deleteExpense(String id) async {
     try {
-      await _client.from('expenses').delete().eq('id', expenseId);
+      await _client.from('expenses').delete().eq('id', id);
+      await logAudit(action: 'DELETE_EXPENSE', entity: 'Expense ID ');
       return true;
     } catch (e) {
-      debugPrint('Error deleting expense: $e');
+      debugPrint('Error deleting expense: ');
       return false;
     }
   }
 
-  // ----------------------------------------------------
-  // AUDIT LOGS
-  // ----------------------------------------------------
+  // --- AUDIT LOGS ---
   static Future<List<AuditLogModel>> getAuditLogs() async {
     try {
-      final response = await _client
-          .from('audit_logs')
-          .select()
-          .order('created_at', ascending: false)
-          .limit(100);
-      return (response as List).map((e) => AuditLogModel.fromJson(e)).toList();
+      final response = await _client.from('audit_logs').select('*').order('created_at', ascending: false).limit(100);
+      return (response as List).map((json) => AuditLogModel.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('Error getting audit logs: $e');
+      debugPrint('Error fetching audit logs: ');
       return [];
     }
   }
 
-  static Future<void> logAudit({
-    required String action,
-    required String entity,
-    String? previousValue,
-    String? newValue,
-    String userName = 'Admin',
-  }) async {
+  static Future<void> logAudit({required String action, required String entity, String? newValue}) async {
     try {
+      final user = _client.auth.currentUser;
       await _client.from('audit_logs').insert({
-        'user_name': userName,
+        'user_name': user?.email ?? 'Mobile App User',
         'action': action,
         'entity': entity,
-        'previous_value': previousValue,
         'new_value': newValue,
       });
     } catch (e) {
-      debugPrint('Error writing audit log: $e');
+      debugPrint('Audit logging failed: ');
     }
   }
 
-  // ----------------------------------------------------
-  // LOYALTY RULES
-  // ----------------------------------------------------
+  // --- LOYALTY RULES ---
   static Future<List<LoyaltyRedemptionRule>> getLoyaltyRedemptionRules() async {
     try {
-      final response = await _client
-          .from('loyalty_redemption_rules')
-          .select()
-          .eq('enabled', true)
-          .order('points_required', ascending: true);
-      return (response as List).map((e) => LoyaltyRedemptionRule.fromJson(e)).toList();
+      final response = await _client.from('loyalty_redemption_rules').select('*').order('points_required', ascending: true);
+      return (response as List).map((json) => LoyaltyRedemptionRule.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('Error getting loyalty rules: $e');
+      debugPrint('Error fetching loyalty rules: ');
       return [];
     }
   }
 
-  // ----------------------------------------------------
-  // BILLS
-  // ----------------------------------------------------
+  // --- SETTINGS ---
+  static Future<AllSettings> getSettings() async {
+    final defaultSettings = AllSettings(
+      shop: ShopSettings(shopName: 'PrintPro Shop', phone: '9876543210', address: 'Main Street'),
+      billing: BillingSettings(),
+      loyalty: LoyaltySettings(),
+    );
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(_getUserKey('settings'));
+      if (cached != null) {
+        return AllSettings.fromJson(jsonDecode(cached));
+      }
+
+      final response = await _client.from('settings').select('*').limit(1).maybeSingle();
+      if (response != null && response['value'] != null) {
+        final settings = AllSettings.fromJson(response['value']);
+        await prefs.setString(_getUserKey('settings'), jsonEncode(settings.toJson()));
+        return settings;
+      }
+    } catch (e) {
+      debugPrint('Error fetching settings: ');
+    }
+
+    return defaultSettings;
+  }
+
+  static Future<void> saveSettings(AllSettings settings) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_getUserKey('settings'), jsonEncode(settings.toJson()));
+
+      final existing = await _client.from('settings').select('id').limit(1).maybeSingle();
+      if (existing != null) {
+        await _client.from('settings').update({'value': settings.toJson()}).eq('id', existing['id']);
+      } else {
+        await _client.from('settings').insert({'value': settings.toJson()});
+      }
+
+      await logAudit(action: 'UPDATE_SETTINGS', entity: 'Shop Settings');
+    } catch (e) {
+      debugPrint('Error saving settings: ');
+    }
+  }
+
+  // --- BILLS & POS TRANSACTION ENGINE ---
+  static Future<String> _generateBillNumber() async {
+    final now = DateTime.now();
+    final year = now.year.toString().substring(2);
+    final month = now.month.toString().padLeft(2, '0');
+    final randomSuffix = (1000 + (now.microsecond % 9000)).toString();
+    return 'BILL-' + year + month + '-' + randomSuffix;
+  }
+
   static Future<List<BillModel>> getBills() async {
     try {
-      final response = await _client
-          .from('bills')
-          .select('*, customers(name, mobile), bill_items(*)')
-          .order('created_at', ascending: false);
-      return (response as List).map((e) => BillModel.fromJson(e)).toList();
+      final billsData = await _client.from('bills').select('*, customer:customers(name, mobile), items:bill_items(*)').order('created_at', ascending: false);
+      return (billsData as List).map((json) {
+        final cust = json['customer'] as Map<String, dynamic>?;
+        return BillModel.fromJson({
+          ...json,
+          'customer_name': cust?['name'],
+          'customer_phone': cust?['mobile'],
+        });
+      }).toList();
     } catch (e) {
-      debugPrint('Error getting bills: $e');
+      debugPrint('Error fetching bills: ');
       return [];
     }
   }
 
-  static Future<String> getNextBillNumber() async {
-    try {
-      final res = await _client.rpc('get_next_sequence', params: {'p_key': 'BILL'});
-      if (res != null) return res.toString();
-    } catch (e) {
-      debugPrint('Error generating bill sequence from RPC: $e');
+  static Future<String> syncBillPayload(Map<String, dynamic> payload) async {
+    final billData = Map<String, dynamic>.from(payload['billData']);
+    final itemsPayload = List<Map<String, dynamic>>.from(payload['itemsPayload']);
+
+    final billRes = await _client.from('bills').insert(billData).select().single();
+    final newBillId = billRes['id'] as String;
+
+    if (itemsPayload.isNotEmpty) {
+      for (final item in itemsPayload) {
+        item['bill_id'] = newBillId;
+      }
+      await _client.from('bill_items').insert(itemsPayload);
     }
-    final rand = DateTime.now().millisecondsSinceEpoch.toString().substring(7);
-    return 'BILL-$rand';
+    return newBillId;
   }
 
   static Future<BillModel?> createBill({
@@ -291,20 +283,18 @@ class ApiRepository {
     required List<BillItemModel> items,
   }) async {
     try {
-      final billNumber = await getNextBillNumber();
-      final paidTotal = cashPaid + upiPaid + advanceUsed;
-
+      final billNumber = await _generateBillNumber();
       final billData = {
         'bill_number': billNumber,
         'customer_id': customerId,
         'total': total,
         'discount': discount,
-        'rounding_method': roundingMethod.toDisplayString(),
+        'rounding_method': roundingMethod.name,
         'rounding_adjustment': roundingAdjustment,
         'grand_total': grandTotal,
         'cash_paid': cashPaid,
         'upi_paid': upiPaid,
-        'paid_total': paidTotal,
+        'paid_total': cashPaid + upiPaid,
         'advance_used': advanceUsed,
         'advance_earned': advanceEarned,
         'payment_method': paymentMethod,
@@ -312,52 +302,63 @@ class ApiRepository {
         'loyalty_points_redeemed': loyaltyPointsRedeemed,
       };
 
-      final billRes = await _client.from('bills').insert(billData).select().single();
-      final billId = billRes['id'] as String;
+      final itemsPayload = items.map((item) => {
+        'product_id': item.productId,
+        'product_name': item.productName,
+        'quantity': item.quantity,
+        'price': item.price,
+        'total': item.total,
+      }).toList();
 
-      if (items.isNotEmpty) {
-        final itemsPayload = items.map((it) => {
-          'bill_id': billId,
-          'product_id': it.productId,
-          'product_name': it.productName,
-          'quantity': it.quantity,
-          'price': it.price,
-          'total': it.total,
-        }).toList();
+      final createdBillId = await syncBillPayload({
+        'billData': billData,
+        'itemsPayload': itemsPayload,
+      });
 
-        await _client.from('bill_items').insert(itemsPayload);
-      }
-
+      // Advance / Loyalty Updates
       if (customerId != null) {
-        final custRes = await _client.from('customers').select().eq('id', customerId).single();
-        final currentAdv = (custRes['advance_balance'] as num?)?.toDouble() ?? 0.0;
-        final currentLoyalty = (custRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
+        final customerRes = await _client.from('customers').select('advance_balance, loyalty_points').eq('id', customerId).single();
+        final currentAdvance = (customerRes['advance_balance'] as num?)?.toDouble() ?? 0.0;
+        final currentLoyalty = (customerRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
 
-        final newAdv = (currentAdv - advanceUsed + advanceEarned).clamp(0.0, double.infinity);
+        final newAdvance = (currentAdvance - advanceUsed + advanceEarned).clamp(0.0, double.infinity);
         final newLoyalty = (currentLoyalty - loyaltyPointsRedeemed + loyaltyPointsEarned).clamp(0.0, double.infinity);
 
         await _client.from('customers').update({
-          'advance_balance': newAdv,
+          'advance_balance': newAdvance,
           'loyalty_points': newLoyalty,
         }).eq('id', customerId);
       }
 
-      final fullBillRes = await _client
-          .from('bills')
-          .select('*, customers(name, mobile), bill_items(*)')
-          .eq('id', billId)
-          .single();
+      await logAudit(action: 'CREATE_BILL', entity: billNumber, newValue: 'Grand Total: ');
 
-      return BillModel.fromJson(fullBillRes);
+      return BillModel(
+        id: createdBillId,
+        billNumber: billNumber,
+        customerId: customerId,
+        total: total,
+        discount: discount,
+        roundingMethod: roundingMethod.name,
+        roundingAdjustment: roundingAdjustment,
+        grandTotal: grandTotal,
+        cashPaid: cashPaid,
+        upiPaid: upiPaid,
+        paidTotal: cashPaid + upiPaid,
+        advanceUsed: advanceUsed,
+        advanceEarned: advanceEarned,
+        paymentMethod: paymentMethod,
+        loyaltyPointsEarned: loyaltyPointsEarned,
+        loyaltyPointsRedeemed: loyaltyPointsRedeemed,
+        createdAt: DateTime.now().toIso8601String(),
+        items: items,
+      );
     } catch (e) {
-      debugPrint('Error creating bill: $e');
+      debugPrint('Error creating bill: ');
       return null;
     }
   }
 
-  // ----------------------------------------------------
-  // DASHBOARD STATS
-  // ----------------------------------------------------
+  // --- DASHBOARD AGGREGATION ---
   static Future<DashboardStatsModel> getDashboardStats() async {
     try {
       final bills = await getBills();
@@ -365,45 +366,46 @@ class ApiRepository {
       final customers = await getCustomers();
 
       final todayStr = DateTime.now().toIso8601String().split('T')[0];
-      final currentMonthStr = todayStr.substring(0, 7);
+      final monthStr = todayStr.substring(0, 7);
 
-      double todaysSales = 0;
-      int todaysBillsCount = 0;
-      double monthlySales = 0;
+      double todaySales = 0;
+      double monthSales = 0;
       double totalIncome = 0;
-      double pendingBalance = 0;
+      double pendingBalances = 0;
+      int todaysBillsCount = 0;
 
       for (final b in bills) {
         totalIncome += b.grandTotal;
         if (b.createdAt.startsWith(todayStr)) {
-          todaysSales += b.grandTotal;
+          todaySales += b.grandTotal;
           todaysBillsCount++;
         }
-        if (b.createdAt.startsWith(currentMonthStr)) {
-          monthlySales += b.grandTotal;
+        if (b.createdAt.startsWith(monthStr)) {
+          monthSales += b.grandTotal;
         }
-        final due = (b.grandTotal - b.paidTotal).clamp(0.0, double.infinity);
-        pendingBalance += due;
       }
 
-      final totalExpense = expenses.fold(0.0, (sum, e) => sum + e.amount);
-      final netProfit = totalIncome - totalExpense;
-      final avgBill = bills.isNotEmpty ? totalIncome / bills.length : 0.0;
+      for (final c in customers) {
+        pendingBalances += c.advanceBalance;
+      }
+
+      double totalExpenses = expenses.fold(0.0, (sum, e) => sum + e.amount);
+      double averageBillValue = bills.isNotEmpty ? (totalIncome / bills.length) : 0.0;
 
       return DashboardStatsModel(
-        todaysSales: todaysSales,
-        monthlySales: monthlySales,
+        todaysSales: todaySales,
+        monthlySales: monthSales,
         todaysBillsCount: todaysBillsCount,
-        pendingBalance: pendingBalance,
+        pendingBalance: pendingBalances,
         totalCustomers: customers.length,
         totalIncome: totalIncome,
-        totalExpense: totalExpense,
-        netProfit: netProfit,
+        totalExpense: totalExpenses,
+        netProfit: totalIncome - totalExpenses,
         billsGenerated: bills.length,
-        averageBillValue: avgBill,
+        averageBillValue: averageBillValue,
       );
     } catch (e) {
-      debugPrint('Error calculating dashboard stats: $e');
+      debugPrint('Error loading dashboard stats: ');
       return DashboardStatsModel.empty();
     }
   }
