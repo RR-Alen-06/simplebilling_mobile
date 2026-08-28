@@ -256,6 +256,33 @@ class ApiRepository {
     return double.parse((pointsToRedeem * ratePerPoint).toStringAsFixed(2));
   }
 
+  static Future<void> syncCustomerPayload(Map<String, dynamic> payload) async {
+    await _client.from('customers').insert(payload);
+    await logAudit(
+      action: 'CREATE_CUSTOMER',
+      entity: 'Customer ' + (payload['name'] ?? ''),
+      newValue: 'Advance: ' + (payload['advance_balance']?.toString() ?? '0.0'),
+    );
+  }
+
+  static Future<void> syncProductPayload(Map<String, dynamic> payload) async {
+    await _client.from('products').insert(payload);
+    await logAudit(
+      action: 'CREATE_PRODUCT',
+      entity: 'Product ' + (payload['name'] ?? ''),
+      newValue: 'Price: ' + (payload['price']?.toString() ?? '0.0'),
+    );
+  }
+
+  static Future<void> syncExpensePayload(Map<String, dynamic> payload) async {
+    await _client.from('expenses').insert(payload);
+    await logAudit(
+      action: 'CREATE_EXPENSE',
+      entity: payload['title'] ?? 'Expense',
+      newValue: 'Amount: ' + (payload['amount']?.toString() ?? '0.0'),
+    );
+  }
+
   // --- BILLS & POS TRANSACTION ENGINE ---
   static Future<String> _generateBillNumber() async {
     final now = DateTime.now();

@@ -115,8 +115,21 @@ class SyncQueueManager {
           await _persistQueue();
 
           try {
-            if (task.action == 'create_bill') {
-              await ApiRepository.syncBillPayload(task.payload);
+            switch (task.action) {
+              case 'create_bill':
+                await ApiRepository.syncBillPayload(task.payload);
+                break;
+              case 'create_customer':
+                await ApiRepository.syncCustomerPayload(task.payload);
+                break;
+              case 'create_product':
+                await ApiRepository.syncProductPayload(task.payload);
+                break;
+              case 'create_expense':
+                await ApiRepository.syncExpensePayload(task.payload);
+                break;
+              default:
+                debugPrint('Unknown sync task action: ' + task.action);
             }
 
             tasks[i] = task.copyWith(status: SyncStatus.synced, clearError: true);

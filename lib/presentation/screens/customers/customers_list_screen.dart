@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
+import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
+import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
-import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
+import 'package:simplebilling_mobile/presentation/shared/widgets/sync_status_badge.dart';
 import 'package:simplebilling_mobile/providers/billing_provider.dart';
 
 class CustomersListScreen extends ConsumerStatefulWidget {
@@ -22,9 +24,22 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
     super.dispose();
   }
 
+  SyncStatus _getCustomerSyncStatus(String name, String? mobile, List<SyncTask> tasks) {
+    for (final task in tasks) {
+      if (task.action == 'create_customer') {
+        final payload = task.payload;
+        if (payload['name'] == name && payload['mobile'] == mobile) {
+          return task.status;
+        }
+      }
+    }
+    return SyncStatus.synced;
+  }
+
   void _showAddCustomerDialog() {
     final nameCtrl = TextEditingController();
     final mobileCtrl = TextEditingController();
+    final advanceCtrl = TextEditingController(text: '0.0');
 
     showDialog(
       context: context,
@@ -44,6 +59,12 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(labelText: 'Mobile Number', border: OutlineInputBorder()),
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: advanceCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Initial Advance (₹)', border: OutlineInputBorder()),
+            ),
           ],
         ),
         actions: [
@@ -55,15 +76,21 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
             onPressed: () async {
               final name = nameCtrl.text.trim();
-              final mobile = mobileCtrl.text.trim();
+              final mobile = mobileCtrl.text.trim().isEmpty ? null : mobileCtrl.text.trim();
+              final advance = double.tryParse(advanceCtrl.text) ?? 0.0;
               if (name.isEmpty) return;
 
-              final created = await ApiRepository.createCustomer(name, mobile);
-              if (created != null && mounted) {
+              // Enqueue create_customer task
+              await SyncQueueManager.instance.enqueueTask('create_customer', {
+                'name': name,
+                'mobile': mobile,
+                'advance_balance': advance,
+                'loyalty_points': 0.0,
+              });
+
+              if (mounted) {
                 ref.invalidate(customersProvider);
-                if (ctx.mounted) {
-                  Navigator.of(ctx).pop();
-                }
+                if (ctx.mounted) Navigator.of(ctx).pop();
               }
             },
             child: const Text('Save Customer'),
@@ -104,7 +131,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                hintText: 'Search customer name or mobile...',
+                hintText: 'Search by name or mobile...',
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 fillColor: Colors.white,
@@ -114,59 +141,73 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
             ),
           ),
           Expanded(
-            child: customersAsync.when(
-              data: (customers) {
-                final filtered = customers.where((c) =>
-                    c.name.toLowerCase().contains(_searchTerm) ||
-                    (c.mobile?.toLowerCase().contains(_searchTerm) ?? false)).toList();
+            child: ValueListenableBuilder<List<SyncTask>>(
+              valueListenable: SyncQueueManager.instance.tasksNotifier,
+              builder: (context, tasks, child) {
+                return customersAsync.when(
+                  data: (customers) {
+                    final filtered = customers.where((c) =>
+                        c.name.toLowerCase().contains(_searchTerm) ||
+                        (c.mobile ?? '').contains(_searchTerm)).toList();
 
-                if (filtered.isEmpty) {
-                  return const Center(child: Text('No customers found'));
-                }
+                    if (filtered.isEmpty) {
+                      return const Center(child: Text('No customers found'));
+                    }
 
-                return ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  itemCount: filtered.length,
-                  separatorBuilder: (c, i) => const SizedBox(height: 10),
-                  itemBuilder: (ctx, idx) {
-                    final customer = filtered[idx];
-                    return Card(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: AppColors.border),
-                      ),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.surfaceVariant,
-                          child: Text(
-                            customer.name.isNotEmpty ? customer.name[0].toUpperCase() : 'C',
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary),
+                    return ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: filtered.length,
+                      separatorBuilder: (context, index) => const SizedBox(height: 10),
+                      itemBuilder: (ctx, idx) {
+                        final cust = filtered[idx];
+                        final syncStatus = _getCustomerSyncStatus(cust.name, cust.mobile, tasks);
+
+                        return Card(
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: AppColors.border),
                           ),
-                        ),
-                        title: Text(customer.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(customer.mobile ?? 'No Mobile'),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              'Adv: ${Formatters.currency(customer.advanceBalance)}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.secondary, fontSize: 13),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: AppColors.surfaceVariant,
+                              child: const Icon(Icons.person, color: AppColors.primary),
                             ),
-                            Text(
-                              '${customer.loyaltyPoints.toStringAsFixed(0)} pts',
-                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            title: Row(
+                              children: [
+                                Text(cust.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 8),
+                                SyncStatusBadge(
+                                  status: syncStatus,
+                                  size: 15,
+                                  onRetry: () => SyncQueueManager.instance.processQueue(),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
+                            subtitle: Text('Mobile: ' + (cust.mobile ?? '-')),
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Advance: ' + Formatters.currency(cust.advanceBalance),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.secondary, fontSize: 13),
+                                ),
+                                Text(
+                                  cust.loyaltyPoints.toStringAsFixed(0) + ' pts',
+                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, s) => Center(child: Text('Error: ')),
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, s) => Center(child: Text('Error: $err')),
             ),
           ),
         ],

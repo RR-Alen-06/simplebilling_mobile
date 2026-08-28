@@ -1,8 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
+import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
+import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
+import 'package:simplebilling_mobile/presentation/shared/widgets/sync_status_badge.dart';
 import 'package:simplebilling_mobile/providers/billing_provider.dart';
 
 final categoriesList = ['Xerox & Print', 'Lamination & Binding', 'Stationery', 'Paper & Envelopes', 'Other Services'];
@@ -22,6 +25,18 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  SyncStatus _getProductSyncStatus(String name, String category, List<SyncTask> tasks) {
+    for (final task in tasks) {
+      if (task.action == 'create_product') {
+        final payload = task.payload;
+        if (payload['name'] == name && payload['category'] == category) {
+          return task.status;
+        }
+      }
+    }
+    return SyncStatus.synced;
   }
 
   void _showAddProductDialog() {
@@ -71,8 +86,14 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                 final price = double.tryParse(priceCtrl.text) ?? 0.0;
                 if (name.isEmpty || price < 0) return;
 
-                final created = await ApiRepository.createProduct(name, category, price);
-                if (created != null && mounted) {
+                // Enqueue create_product task
+                await SyncQueueManager.instance.enqueueTask('create_product', {
+                  'name': name,
+                  'category': category,
+                  'price': price,
+                });
+
+                if (mounted) {
                   ref.invalidate(productsProvider);
                   if (ctx.mounted) Navigator.of(ctx).pop();
                 }
@@ -126,75 +147,92 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
             ),
           ),
           Expanded(
-            child: productsAsync.when(
-              data: (products) {
-                final filtered = products.where((p) =>
-                    p.name.toLowerCase().contains(_searchTerm) ||
-                    p.category.toLowerCase().contains(_searchTerm)).toList();
+            child: ValueListenableBuilder<List<SyncTask>>(
+              valueListenable: SyncQueueManager.instance.tasksNotifier,
+              builder: (context, tasks, child) {
+                return productsAsync.when(
+                  data: (products) {
+                    final filtered = products.where((p) =>
+                        p.name.toLowerCase().contains(_searchTerm) ||
+                        p.category.toLowerCase().contains(_searchTerm)).toList();
 
-                if (filtered.isEmpty) {
-                  return const Center(child: Text('No products in catalog'));
-                }
+                    if (filtered.isEmpty) {
+                      return const Center(child: Text('No products in catalog'));
+                    }
 
-                return ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  itemCount: filtered.length,
-                  separatorBuilder: (c, i) => const SizedBox(height: 10),
-                  itemBuilder: (ctx, idx) {
-                    final p = filtered[idx];
-                    return Card(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: AppColors.border),
-                      ),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.surfaceVariant,
-                          child: const Icon(Icons.inventory_2_outlined, color: AppColors.primary),
-                        ),
-                        title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(p.category),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              Formatters.currency(p.price),
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.primary),
+                    return ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: filtered.length,
+                      separatorBuilder: (c, i) => const SizedBox(height: 10),
+                      itemBuilder: (ctx, idx) {
+                        final p = filtered[idx];
+                        final syncStatus = _getProductSyncStatus(p.name, p.category, tasks);
+
+                        return Card(
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: AppColors.border),
+                          ),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: AppColors.surfaceVariant,
+                              child: const Icon(Icons.inventory_2_outlined, color: AppColors.primary),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
-                              onPressed: () async {
-                                final confirmed = await showDialog<bool>(
-                                  context: context,
-                                  builder: (c) => AlertDialog(
-                                    title: const Text('Delete Product?'),
-                                    content: Text('Remove "${p.name}" from catalog?'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
-                                      ElevatedButton(
-                                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
-                                        onPressed: () => Navigator.of(c).pop(true),
-                                        child: const Text('Delete'),
+                            title: Row(
+                              children: [
+                                Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 8),
+                                SyncStatusBadge(
+                                  status: syncStatus,
+                                  size: 15,
+                                  onRetry: () => SyncQueueManager.instance.processQueue(),
+                                ),
+                              ],
+                            ),
+                            subtitle: Text(p.category),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  Formatters.currency(p.price),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.primary),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                                  onPressed: () async {
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (c) => AlertDialog(
+                                        title: const Text('Delete Product?'),
+                                        content: Text('Remove ' + p.name + ' from catalog?'),
+                                        actions: [
+                                          TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+                                            onPressed: () => Navigator.of(c).pop(true),
+                                            child: const Text('Delete'),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                );
-                                if (confirmed == true) {
-                                  await ApiRepository.deleteProduct(p.id);
-                                  ref.invalidate(productsProvider);
-                                }
-                              },
+                                    );
+                                    if (confirmed == true) {
+                                      await ApiRepository.deleteProduct(p.id);
+                                      ref.invalidate(productsProvider);
+                                    }
+                                  },
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      },
                     );
                   },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, s) => Center(child: Text('Error: ')),
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, s) => Center(child: Text('Error: $err')),
             ),
           ),
         ],

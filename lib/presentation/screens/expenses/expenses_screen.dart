@@ -1,9 +1,12 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
+import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
+import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
 import 'package:simplebilling_mobile/data/models/expense_model.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
+import 'package:simplebilling_mobile/presentation/shared/widgets/sync_status_badge.dart';
 
 final expensesListProvider = FutureProvider<List<ExpenseModel>>((ref) async {
   return await ApiRepository.getExpenses();
@@ -19,6 +22,18 @@ class ExpensesScreen extends ConsumerStatefulWidget {
 }
 
 class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
+  SyncStatus _getExpenseSyncStatus(String title, double amount, String category, List<SyncTask> tasks) {
+    for (final task in tasks) {
+      if (task.action == 'create_expense') {
+        final payload = task.payload;
+        if (payload['title'] == title && payload['amount'] == amount && payload['category'] == category) {
+          return task.status;
+        }
+      }
+    }
+    return SyncStatus.synced;
+  }
+
   void _showAddExpenseDialog() {
     final titleCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
@@ -66,8 +81,14 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 final amount = double.tryParse(amountCtrl.text) ?? 0.0;
                 if (title.isEmpty || amount <= 0) return;
 
-                final created = await ApiRepository.createExpense(title, amount, category);
-                if (created != null && mounted) {
+                // Enqueue create_expense task
+                await SyncQueueManager.instance.enqueueTask('create_expense', {
+                  'title': title,
+                  'amount': amount,
+                  'category': category,
+                });
+
+                if (mounted) {
                   ref.invalidate(expensesListProvider);
                   if (ctx.mounted) Navigator.of(ctx).pop();
                 }
@@ -104,82 +125,99 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Add Expense'),
       ),
-      body: expensesAsync.when(
-        data: (expenses) {
-          if (expenses.isEmpty) {
-            return const Center(child: Text('No expenses logged yet'));
-          }
+      body: ValueListenableBuilder<List<SyncTask>>(
+        valueListenable: SyncQueueManager.instance.tasksNotifier,
+        builder: (context, tasks, child) {
+          return expensesAsync.when(
+            data: (expenses) {
+              if (expenses.isEmpty) {
+                return const Center(child: Text('No expenses logged yet'));
+              }
 
-          final total = expenses.fold(0.0, (sum, e) => sum + e.amount);
+              final total = expenses.fold(0.0, (sum, e) => sum + e.amount);
 
-          return Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Total Expenses Logged:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text(
-                      Formatters.currency(total),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.error),
+              return Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
                     ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  itemCount: expenses.length,
-                  separatorBuilder: (c, i) => const SizedBox(height: 10),
-                  itemBuilder: (ctx, idx) {
-                    final e = expenses[idx];
-                    return Card(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: AppColors.border),
-                      ),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.surfaceVariant,
-                          child: const Icon(Icons.receipt_outlined, color: AppColors.error),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Total Expenses Logged:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        Text(
+                          Formatters.currency(total),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.error),
                         ),
-                        title: Text(e.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('${e.category} • ${Formatters.parseAndFormatDate(e.createdAt)}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              Formatters.currency(e.amount),
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.error),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: expenses.length,
+                      separatorBuilder: (c, i) => const SizedBox(height: 10),
+                      itemBuilder: (ctx, idx) {
+                        final e = expenses[idx];
+                        final syncStatus = _getExpenseSyncStatus(e.title, e.amount, e.category, tasks);
+
+                        return Card(
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: AppColors.border),
+                          ),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: AppColors.surfaceVariant,
+                              child: const Icon(Icons.receipt_outlined, color: AppColors.error),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
-                              onPressed: () async {
-                                await ApiRepository.deleteExpense(e.id);
-                                ref.invalidate(expensesListProvider);
-                              },
+                            title: Row(
+                              children: [
+                                Text(e.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 8),
+                                SyncStatusBadge(
+                                  status: syncStatus,
+                                  size: 15,
+                                  onRetry: () => SyncQueueManager.instance.processQueue(),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+                            subtitle: Text(e.category + ' • ' + Formatters.parseAndFormatDate(e.createdAt)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  Formatters.currency(e.amount),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.error),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                                  onPressed: () async {
+                                    await ApiRepository.deleteExpense(e.id);
+                                    ref.invalidate(expensesListProvider);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (err, s) => Center(child: Text('Error: ')),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, s) => Center(child: Text('Error: $err')),
       ),
     );
   }
