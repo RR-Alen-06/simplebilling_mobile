@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
 import 'package:simplebilling_mobile/data/models/bill_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
+import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
 import 'package:simplebilling_mobile/providers/billing_provider.dart';
 import 'package:simplebilling_mobile/presentation/shared/printing/receipt_generator.dart';
 
@@ -54,7 +55,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
 
     ref.read(cartProvider.notifier).addItem(name, price, qty);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Added "$name" ($qty x ₹$price)'), duration: const Duration(milliseconds: 600)),
+      SnackBar(content: Text('Added "$name" ($qty x â‚¹$price)'), duration: const Duration(milliseconds: 600)),
     );
   }
 
@@ -292,7 +293,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                   const SizedBox(height: 16),
 
                   // Quick Xerox Presets Grid
-                  const Text('⚡ Xerox & Quick Presets', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const Text('âš¡ Xerox & Quick Presets', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -347,7 +348,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                                 child: TextField(
                                   controller: _customPriceCtrl,
                                   keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(labelText: 'Rate (₹)', isDense: true, border: OutlineInputBorder()),
+                                  decoration: const InputDecoration(labelText: 'Rate (â‚¹)', isDense: true, border: OutlineInputBorder()),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -369,7 +370,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                   const SizedBox(height: 16),
 
                   // Products Catalog Search & List
-                  const Text('📦 Stationery & Products Catalog', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const Text('ðŸ“¦ Stationery & Products Catalog', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _searchCtrl,
@@ -473,7 +474,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(item.productName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                                        Text('₹${item.price.toStringAsFixed(2)} each', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                                        Text('â‚¹${item.price.toStringAsFixed(2)} each', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
                                       ],
                                     ),
                                   ),
@@ -564,7 +565,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                               child: TextField(
                                 controller: _cashCtrl,
                                 keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(labelText: 'Cash Paid (₹)', isDense: true, border: OutlineInputBorder()),
+                                decoration: const InputDecoration(labelText: 'Cash Paid (â‚¹)', isDense: true, border: OutlineInputBorder()),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -572,7 +573,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                               child: TextField(
                                 controller: _upiCtrl,
                                 keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(labelText: 'UPI Paid (₹)', isDense: true, border: OutlineInputBorder()),
+                                decoration: const InputDecoration(labelText: 'UPI Paid (â‚¹)', isDense: true, border: OutlineInputBorder()),
                               ),
                             ),
                           ],
@@ -614,7 +615,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
   Widget _buildPresetChip(String title, double price) {
     return ActionChip(
       avatar: const Icon(Icons.print, size: 16, color: AppColors.primary),
-      label: Text('$title (₹$price)'),
+      label: Text('$title (â‚¹$price)'),
       backgroundColor: Colors.white,
       side: const BorderSide(color: AppColors.border),
       onPressed: () => _addQuickPreset(title, price),

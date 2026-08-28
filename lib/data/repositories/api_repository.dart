@@ -224,6 +224,38 @@ class ApiRepository {
     }
   }
 
+  static Future<String> generateBillNumber() async {
+    return _generateBillNumber();
+  }
+
+  static double calculateLoyaltyDiscount(double pointsToRedeem, LoyaltySettings loyaltySettings, List<LoyaltyRedemptionRule> activeRedemptionRules) {
+    if (pointsToRedeem <= 0) return 0.0;
+    final enabledRules = activeRedemptionRules.where((r) => r.enabled).toList()
+      ..sort((a, b) => b.pointsRequired.compareTo(a.pointsRequired));
+
+    if (enabledRules.isNotEmpty) {
+      double remainingPts = pointsToRedeem;
+      double totalDiscount = 0.0;
+
+      for (final rule in enabledRules) {
+        if (remainingPts >= rule.pointsRequired) {
+          final multiplier = (remainingPts / rule.pointsRequired).floor();
+          totalDiscount += multiplier * rule.discountAmount;
+          remainingPts -= multiplier * rule.pointsRequired;
+        }
+      }
+      if (totalDiscount > 0) return double.parse(totalDiscount.toStringAsFixed(2));
+      final bestRule = enabledRules.first;
+      final rate = bestRule.discountAmount / bestRule.pointsRequired;
+      return double.parse((pointsToRedeem * rate).toStringAsFixed(2));
+    }
+
+    final req = loyaltySettings.pointsRequired > 0 ? loyaltySettings.pointsRequired : 10.0;
+    final disc = loyaltySettings.discountValue > 0 ? loyaltySettings.discountValue : 5.0;
+    final ratePerPoint = disc / req;
+    return double.parse((pointsToRedeem * ratePerPoint).toStringAsFixed(2));
+  }
+
   // --- BILLS & POS TRANSACTION ENGINE ---
   static Future<String> _generateBillNumber() async {
     final now = DateTime.now();
