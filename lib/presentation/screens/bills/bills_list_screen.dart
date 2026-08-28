@@ -132,10 +132,7 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
                       itemBuilder: (ctx, idx) {
                         final bill = filtered[idx];
                         final syncStatus = _getBillSyncStatus(bill.billNumber, tasks);
-                        final custName = bill.customerName ?? 'Walk-in';
-                        final custMobile = bill.customerMobile ?? '-';
-
-                        return Card(
+                                                return Card(
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
