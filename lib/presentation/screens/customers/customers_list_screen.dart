@@ -1,10 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
 import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
 import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
+import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/sync_status_badge.dart';
 import 'package:simplebilling_mobile/providers/billing_provider.dart';
 
@@ -39,33 +40,48 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
   void _showAddCustomerDialog() {
     final nameCtrl = TextEditingController();
     final mobileCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
     final advanceCtrl = TextEditingController(text: '0.0');
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Add New Customer'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+        title: const Row(
           children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'Customer Name', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: mobileCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Mobile Number', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: advanceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Initial Advance (₹)', border: OutlineInputBorder()),
-            ),
+            Icon(Icons.person_add, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text('Add New Customer'),
           ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Customer Name *', border: OutlineInputBorder(), isDense: true),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: mobileCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Mobile Number', border: OutlineInputBorder(), isDense: true),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Email Address (Optional)', border: OutlineInputBorder(), isDense: true),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: advanceCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Initial Advance Deposit (Rs.)', border: OutlineInputBorder(), isDense: true),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -77,27 +93,35 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
             onPressed: () async {
               final name = nameCtrl.text.trim();
               final mobile = mobileCtrl.text.trim().isEmpty ? null : mobileCtrl.text.trim();
+              final email = emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim();
               final advance = double.tryParse(advanceCtrl.text) ?? 0.0;
               if (name.isEmpty) return;
 
-              final clientRef = const Uuid().v4();
-
-              // Enqueue create_customer task with unique client_ref
-              await SyncQueueManager.instance.enqueueTask(
-                'create_customer',
-                {
-                  'client_ref': clientRef,
-                  'name': name,
-                  'mobile': mobile,
-                  'advance_balance': advance,
-                  'loyalty_points': 0.0,
-                },
-                clientRef: clientRef,
-              );
+              final created = await ApiRepository.createCustomer(name, mobile, email: email, initialAdvance: advance);
+              if (created == null) {
+                // Offline fallback
+                final clientRef = const Uuid().v4();
+                await SyncQueueManager.instance.enqueueTask(
+                  'create_customer',
+                  {
+                    'client_ref': clientRef,
+                    'name': name,
+                    'mobile': mobile,
+                    'email': email,
+                    'advance_balance': advance,
+                    'loyalty_points': 0.0,
+                  },
+                  clientRef: clientRef,
+                );
+              }
 
               if (mounted) {
                 ref.invalidate(customersProvider);
+                ref.invalidate(customerSummariesProvider);
                 if (ctx.mounted) Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Customer "$name" added successfully!')),
+                );
               }
             },
             child: const Text('Save Customer'),
@@ -109,18 +133,21 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final customersAsync = ref.watch(customersProvider);
+    final customersAsync = ref.watch(customerSummariesProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Customers & Balances', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Customers Directory', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(customersProvider),
+            icon: const Icon(Icons.refresh, color: AppColors.primary),
+            onPressed: () {
+              ref.invalidate(customersProvider);
+              ref.invalidate(customerSummariesProvider);
+            },
           ),
         ],
       ),
@@ -129,80 +156,162 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
         foregroundColor: Colors.white,
         onPressed: _showAddCustomerDialog,
         icon: const Icon(Icons.person_add),
-        label: const Text('Add Customer'),
+        label: const Text('New Customer'),
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12.0),
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                hintText: 'Search by name or mobile...',
+                hintText: 'Search by customer name, mobile, or code...',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                fillColor: Colors.white,
+                suffixIcon: _searchTerm.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchTerm = '');
+                        },
+                      )
+                    : null,
                 filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
               ),
-              onChanged: (val) => setState(() => _searchTerm = val.toLowerCase()),
+              onChanged: (v) => setState(() => _searchTerm = v),
             ),
           ),
           Expanded(
             child: ValueListenableBuilder<List<SyncTask>>(
               valueListenable: SyncQueueManager.instance.tasksNotifier,
-              builder: (context, tasks, child) {
+              builder: (ctx, tasks, _) {
                 return customersAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, _) => Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                        const SizedBox(height: 8),
+                        Text('Error loading customers: $err'),
+                        const SizedBox(height: 12),
+                        ElevatedButton(
+                          onPressed: () => ref.invalidate(customerSummariesProvider),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
                   data: (customers) {
-                    final filtered = customers.where((c) =>
-                        c.name.toLowerCase().contains(_searchTerm) ||
-                        (c.mobile ?? '').contains(_searchTerm)).toList();
+                    final filtered = customers.where((c) {
+                      if (_searchTerm.isEmpty) return true;
+                      final q = _searchTerm.toLowerCase();
+                      return c.name.toLowerCase().contains(q) ||
+                          (c.mobile != null && c.mobile!.toLowerCase().contains(q)) ||
+                          (c.customerCode != null && c.customerCode!.toLowerCase().contains(q)) ||
+                          (c.email != null && c.email!.toLowerCase().contains(q));
+                    }).toList();
 
                     if (filtered.isEmpty) {
-                      return const Center(child: Text('No customers found'));
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.people_outline, size: 48, color: AppColors.textSecondary),
+                            const SizedBox(height: 8),
+                            Text(
+                              _searchTerm.isEmpty ? 'No customers in directory yet' : 'No customers matching "$_searchTerm"',
+                              style: const TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      );
                     }
 
                     return ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       itemCount: filtered.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 10),
-                      itemBuilder: (ctx, idx) {
-                        final cust = filtered[idx];
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (ctx, i) {
+                        final cust = filtered[i];
                         final syncStatus = _getCustomerSyncStatus(cust.clientRef, cust.id, tasks);
 
                         return Card(
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: const BorderSide(color: AppColors.border),
-                          ),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: AppColors.surfaceVariant,
-                              child: const Icon(Icons.person, color: AppColors.primary),
-                            ),
-                            title: Row(
+                          elevation: 0.5,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(cust.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(width: 8),
-                                SyncStatusBadge(
-                                  status: syncStatus,
-                                  size: 15,
-                                  onRetry: () => SyncQueueManager.instance.processQueue(),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          CircleAvatar(
+                                            backgroundColor: AppColors.primary.withOpacity(0.1),
+                                            child: Text(
+                                              cust.name.isNotEmpty ? cust.name[0].toUpperCase() : 'C',
+                                              style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Text(cust.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                                    if (cust.customerCode != null)
+                                                      Padding(
+                                                        padding: const EdgeInsets.only(left: 6),
+                                                        child: Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                          decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+                                                          child: Text(cust.customerCode!, style: const TextStyle(fontSize: 10, color: Colors.black800)),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                                Text(
+                                                  cust.mobile != null && cust.mobile!.isNotEmpty ? cust.mobile! : 'No mobile registered',
+                                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SyncStatusBadge(status: syncStatus),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            subtitle: Text('Mobile: ' + (cust.mobile ?? '-')),
-                            trailing: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  'Advance: ' + Formatters.currency(cust.advanceBalance),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.secondary, fontSize: 13),
-                                ),
-                                Text(
-                                  cust.loyaltyPoints.toStringAsFixed(0) + ' pts',
-                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                const Divider(height: 16),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    _buildStatBadge(
+                                      label: 'Balance Due',
+                                      value: Formatters.currency(cust.balanceDue),
+                                      color: cust.balanceDue > 0 ? AppColors.error : AppColors.textSecondary,
+                                    ),
+                                    _buildStatBadge(
+                                      label: 'Advance Deposit',
+                                      value: Formatters.currency(cust.advanceBalance),
+                                      color: cust.advanceBalance > 0 ? AppColors.success : AppColors.textSecondary,
+                                    ),
+                                    _buildStatBadge(
+                                      label: 'Loyalty Points',
+                                      value: '${cust.loyaltyPoints.toStringAsFixed(0)} pts',
+                                      color: cust.loyaltyPoints > 0 ? Colors.orange[800]! : AppColors.textSecondary,
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -211,14 +320,23 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                       },
                     );
                   },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (err, s) => Center(child: Text('Error: ')),
                 );
               },
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatBadge({required String label, required String value, required Color color}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        const SizedBox(height: 2),
+        Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: color)),
+      ],
     );
   }
 }

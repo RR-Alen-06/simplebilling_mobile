@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
@@ -9,7 +9,7 @@ import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/sync_status_badge.dart';
 import 'package:simplebilling_mobile/providers/billing_provider.dart';
 
-final categoriesList = ['Xerox & Print', 'Lamination & Binding', 'Stationery', 'Paper & Envelopes', 'Other Services'];
+final categoriesList = ['All', 'Stationery', 'Xerox & Print', 'Lamination & Binding', 'Paper & Envelopes', 'Other Services'];
 
 class ProductsScreen extends ConsumerStatefulWidget {
   const ProductsScreen({super.key});
@@ -21,6 +21,7 @@ class ProductsScreen extends ConsumerStatefulWidget {
 class _ProductsScreenState extends ConsumerState<ProductsScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchTerm = '';
+  String _selectedCategory = 'All';
 
   @override
   void dispose() {
@@ -42,37 +43,51 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
   void _showAddProductDialog() {
     final nameCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
-    String category = categoriesList[0];
+    final codeCtrl = TextEditingController();
+    String category = 'Stationery';
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Add New Product'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+          title: const Row(
             children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Product / Item Name', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: category,
-                decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
-                items: categoriesList.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                onChanged: (val) {
-                  if (val != null) setModalState(() => category = val);
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: priceCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Selling Price (₹)', border: OutlineInputBorder()),
-              ),
+              Icon(Icons.add_shopping_cart, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text('Add New Product / SKU'),
             ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Product / Item Name *', border: OutlineInputBorder(), isDense: true),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: category,
+                  decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder(), isDense: true),
+                  items: categoriesList.where((c) => c != 'All').map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (val) {
+                    if (val != null) setModalState(() => category = val);
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: priceCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Selling Rate (Rs.) *', border: OutlineInputBorder(), isDense: true),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: codeCtrl,
+                  decoration: const InputDecoration(labelText: 'Barcode / SKU (Optional)', border: OutlineInputBorder(), isDense: true),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -84,25 +99,32 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
               onPressed: () async {
                 final name = nameCtrl.text.trim();
                 final price = double.tryParse(priceCtrl.text) ?? 0.0;
+                final code = codeCtrl.text.trim().isEmpty ? null : codeCtrl.text.trim();
                 if (name.isEmpty || price < 0) return;
 
-                final clientRef = const Uuid().v4();
-
-                // Enqueue create_product task with unique client_ref
-                await SyncQueueManager.instance.enqueueTask(
-                  'create_product',
-                  {
-                    'client_ref': clientRef,
-                    'name': name,
-                    'category': category,
-                    'price': price,
-                  },
-                  clientRef: clientRef,
-                );
+                final created = await ApiRepository.createProduct(name, category, price, productCode: code);
+                if (created == null) {
+                  // Offline fallback
+                  final clientRef = const Uuid().v4();
+                  await SyncQueueManager.instance.enqueueTask(
+                    'create_product',
+                    {
+                      'client_ref': clientRef,
+                      'name': name,
+                      'category': category,
+                      'price': price,
+                      if (code != null) 'product_code': code,
+                    },
+                    clientRef: clientRef,
+                  );
+                }
 
                 if (mounted) {
                   ref.invalidate(productsProvider);
                   if (ctx.mounted) Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Product "$name" saved!')),
+                  );
                 }
               },
               child: const Text('Save Product'),
@@ -120,12 +142,12 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Products & Catalog', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Products & Catalog', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: AppColors.primary),
             onPressed: () => ref.invalidate(productsProvider),
           ),
         ],
@@ -135,84 +157,154 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
         foregroundColor: Colors.white,
         onPressed: _showAddProductDialog,
         icon: const Icon(Icons.add),
-        label: const Text('Add Product'),
+        label: const Text('New Product'),
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12.0),
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
-                hintText: 'Search products by name or category...',
+                hintText: 'Search product, category, or barcode...',
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                fillColor: Colors.white,
+                suffixIcon: _searchTerm.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchTerm = '');
+                        },
+                      )
+                    : null,
                 filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
               ),
-              onChanged: (val) => setState(() => _searchTerm = val.toLowerCase()),
+              onChanged: (v) => setState(() => _searchTerm = v),
             ),
           ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: categoriesList.map((cat) {
+                final isSelected = _selectedCategory == cat;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: FilterChip(
+                    label: Text(cat),
+                    selected: isSelected,
+                    selectedColor: AppColors.primary.withOpacity(0.15),
+                    checkmarkColor: AppColors.primary,
+                    labelStyle: TextStyle(
+                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 12,
+                    ),
+                    onSelected: (val) {
+                      setState(() => _selectedCategory = cat);
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
           Expanded(
             child: ValueListenableBuilder<List<SyncTask>>(
               valueListenable: SyncQueueManager.instance.tasksNotifier,
-              builder: (context, tasks, child) {
+              builder: (ctx, tasks, _) {
                 return productsAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, _) => Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                        const SizedBox(height: 8),
+                        Text('Error loading products: $err'),
+                        const SizedBox(height: 12),
+                        ElevatedButton(
+                          onPressed: () => ref.invalidate(productsProvider),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
                   data: (products) {
-                    final filtered = products.where((p) =>
-                        p.name.toLowerCase().contains(_searchTerm) ||
-                        p.category.toLowerCase().contains(_searchTerm)).toList();
+                    final filtered = products.where((p) {
+                      final matchesCat = _selectedCategory == 'All' || p.category.toLowerCase() == _selectedCategory.toLowerCase();
+                      if (!matchesCat) return false;
+                      if (_searchTerm.isEmpty) return true;
+                      final q = _searchTerm.toLowerCase();
+                      return p.name.toLowerCase().contains(q) ||
+                          (p.productCode != null && p.productCode!.toLowerCase().contains(q)) ||
+                          p.category.toLowerCase().contains(q);
+                    }).toList();
 
                     if (filtered.isEmpty) {
-                      return const Center(child: Text('No products in catalog'));
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.inventory_2_outlined, size: 48, color: AppColors.textSecondary),
+                            const SizedBox(height: 8),
+                            Text(
+                              _searchTerm.isEmpty ? 'No products in catalog' : 'No products matching "$_searchTerm"',
+                              style: const TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      );
                     }
 
                     return ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       itemCount: filtered.length,
-                      separatorBuilder: (c, i) => const SizedBox(height: 10),
-                      itemBuilder: (ctx, idx) {
-                        final p = filtered[idx];
-                        final syncStatus = _getProductSyncStatus(p.clientRef, p.id, tasks);
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (ctx, i) {
+                        final prod = filtered[i];
+                        final syncStatus = _getProductSyncStatus(prod.clientRef, prod.id, tasks);
 
                         return Card(
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: const BorderSide(color: AppColors.border),
-                          ),
+                          elevation: 0.5,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: AppColors.surfaceVariant,
-                              child: const Icon(Icons.inventory_2_outlined, color: AppColors.primary),
-                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                             title: Row(
                               children: [
-                                Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(width: 8),
-                                SyncStatusBadge(
-                                  status: syncStatus,
-                                  size: 15,
-                                  onRetry: () => SyncQueueManager.instance.processQueue(),
-                                ),
+                                Text(prod.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                if (prod.productCode != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 6),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+                                      child: Text(prod.productCode!, style: const TextStyle(fontSize: 10, color: Colors.black800)),
+                                    ),
+                                  ),
                               ],
                             ),
-                            subtitle: Text(p.category),
+                            subtitle: Text(prod.category, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  Formatters.currency(p.price),
+                                  Formatters.currency(prod.price),
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.primary),
                                 ),
+                                const SizedBox(width: 8),
+                                SyncStatusBadge(status: syncStatus),
                                 IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                                  icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.error),
                                   onPressed: () async {
-                                    final confirmed = await showDialog<bool>(
+                                    final confirm = await showDialog<bool>(
                                       context: context,
                                       builder: (c) => AlertDialog(
-                                        title: const Text('Delete Product?'),
-                                        content: Text('Remove ' + p.name + ' from catalog?'),
+                                        title: const Text('Delete Product'),
+                                        content: Text('Are you sure you want to remove "${prod.name}"?'),
                                         actions: [
                                           TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
                                           ElevatedButton(
@@ -223,8 +315,8 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                                         ],
                                       ),
                                     );
-                                    if (confirmed == true) {
-                                      await ApiRepository.deleteProduct(p.id);
+                                    if (confirm == true) {
+                                      await ApiRepository.deleteProduct(prod.id);
                                       ref.invalidate(productsProvider);
                                     }
                                   },
@@ -236,8 +328,6 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                       },
                     );
                   },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (err, s) => Center(child: Text('Error: ')),
                 );
               },
             ),

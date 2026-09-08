@@ -22,6 +22,8 @@ dependencies:
   uuid: ^4.6.0
   state_notifier: ^1.0.0
   flutter_dotenv: ^6.0.1
+  url_launcher: ^6.3.2
+  mobile_scanner: ^7.4.0
 
 dev_dependencies:
   flutter_test:

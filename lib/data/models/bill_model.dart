@@ -5,13 +5,16 @@
   final String? customerId;
   final String? customerName;
   final String? customerMobile;
+  final String? customerEmail;
   final double total;
   final double discount;
+  final double gstAmount;
   final String roundingMethod;
   final double roundingAdjustment;
   final double grandTotal;
   final double cashPaid;
   final double upiPaid;
+  final double cardPaid;
   final double paidTotal;
   final double advanceUsed;
   final double advanceEarned;
@@ -29,13 +32,16 @@
     this.customerId,
     this.customerName,
     this.customerMobile,
+    this.customerEmail,
     required this.total,
     required this.discount,
+    this.gstAmount = 0.0,
     required this.roundingMethod,
     required this.roundingAdjustment,
     required this.grandTotal,
     required this.cashPaid,
     required this.upiPaid,
+    this.cardPaid = 0.0,
     required this.paidTotal,
     this.advanceUsed = 0.0,
     this.advanceEarned = 0.0,
@@ -48,20 +54,31 @@
   });
 
   factory BillModel.fromJson(Map<String, dynamic> json, [List<BillItemModel> items = const []]) {
+    final cust = json['customer'] as Map<String, dynamic>? ?? json['customers'] as Map<String, dynamic>?;
+
+    final parsedItems = items.isNotEmpty
+        ? items
+        : (json['items'] as List?)?.map((i) => BillItemModel.fromJson(Map<String, dynamic>.from(i))).toList() ??
+            (json['bill_items'] as List?)?.map((i) => BillItemModel.fromJson(Map<String, dynamic>.from(i))).toList() ??
+            [];
+
     return BillModel(
       id: json['id'] as String,
       userId: json['user_id'] as String?,
-      billNumber: json['bill_number'] as String,
+      billNumber: json['bill_number'] as String? ?? 'BILL-000000',
       customerId: json['customer_id'] as String?,
-      customerName: json['customers'] != null ? json['customers']['name'] as String? : null,
-      customerMobile: json['customers'] != null ? json['customers']['mobile'] as String? : null,
+      customerName: json['customer_name'] as String? ?? cust?['name'] as String?,
+      customerMobile: json['customer_mobile'] as String? ?? json['customer_phone'] as String? ?? cust?['mobile'] as String?,
+      customerEmail: json['customer_email'] as String? ?? cust?['email'] as String?,
       total: (json['total'] as num?)?.toDouble() ?? 0.0,
       discount: (json['discount'] as num?)?.toDouble() ?? 0.0,
-      roundingMethod: json['rounding_method'] as String? ?? 'none',
+      gstAmount: (json['gst_amount'] as num?)?.toDouble() ?? 0.0,
+      roundingMethod: json['rounding_method'] as String? ?? 'None',
       roundingAdjustment: (json['rounding_adjustment'] as num?)?.toDouble() ?? 0.0,
       grandTotal: (json['grand_total'] as num?)?.toDouble() ?? 0.0,
       cashPaid: (json['cash_paid'] as num?)?.toDouble() ?? 0.0,
       upiPaid: (json['upi_paid'] as num?)?.toDouble() ?? 0.0,
+      cardPaid: (json['card_paid'] as num?)?.toDouble() ?? 0.0,
       paidTotal: (json['paid_total'] as num?)?.toDouble() ?? 0.0,
       advanceUsed: (json['advance_used'] as num?)?.toDouble() ?? 0.0,
       advanceEarned: (json['advance_earned'] as num?)?.toDouble() ?? 0.0,
@@ -70,7 +87,7 @@
       loyaltyPointsRedeemed: (json['loyalty_points_redeemed'] as num?)?.toDouble() ?? 0.0,
       createdAt: json['created_at'] as String? ?? DateTime.now().toIso8601String(),
       clientRef: json['client_ref'] as String?,
-      items: items,
+      items: parsedItems,
     );
   }
 
@@ -82,11 +99,13 @@
       if (customerId != null) 'customer_id': customerId,
       'total': total,
       'discount': discount,
+      'gst_amount': gstAmount,
       'rounding_method': roundingMethod,
       'rounding_adjustment': roundingAdjustment,
       'grand_total': grandTotal,
       'cash_paid': cashPaid,
       'upi_paid': upiPaid,
+      'card_paid': cardPaid,
       'paid_total': paidTotal,
       'advance_used': advanceUsed,
       'advance_earned': advanceEarned,

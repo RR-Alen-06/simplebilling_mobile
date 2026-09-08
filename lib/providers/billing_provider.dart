@@ -1,4 +1,4 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/customer_model.dart';
 import '../data/models/product_model.dart';
 import '../data/models/bill_model.dart';
@@ -14,12 +14,20 @@ final customersProvider = FutureProvider<List<CustomerModel>>((ref) async {
   return await ApiRepository.getCustomers();
 });
 
+final customerSummariesProvider = FutureProvider<List<CustomerModel>>((ref) async {
+  return await ApiRepository.getCustomerSummaries();
+});
+
 final productsProvider = FutureProvider<List<ProductModel>>((ref) async {
   return await ApiRepository.getProducts();
 });
 
 final loyaltyRulesProvider = FutureProvider<List<LoyaltyRedemptionRule>>((ref) async {
   return await ApiRepository.getLoyaltyRedemptionRules();
+});
+
+final loyaltyEarningRulesProvider = FutureProvider<List<LoyaltyRule>>((ref) async {
+  return await ApiRepository.getLoyaltyRules();
 });
 
 final billsListProvider = FutureProvider<List<BillModel>>((ref) async {
@@ -35,6 +43,7 @@ class CartState {
   final RoundingMethod roundingMethod;
   final double cashPaid;
   final double upiPaid;
+  final double cardPaid;
   final bool useAdvance;
   final double advanceUsed;
   final double pointsToRedeem;
@@ -47,6 +56,7 @@ class CartState {
     this.roundingMethod = RoundingMethod.none,
     this.cashPaid = 0.0,
     this.upiPaid = 0.0,
+    this.cardPaid = 0.0,
     this.useAdvance = false,
     this.advanceUsed = 0.0,
     this.pointsToRedeem = 0.0,
@@ -62,22 +72,18 @@ class CartState {
   }
 
   double calculateLoyaltyDiscount(LoyaltySettings settings, List<LoyaltyRedemptionRule> rules) {
-    if (!settings.enabled || pointsToRedeem <= 0) return 0.0;
-    for (final rule in rules) {
-      if (rule.enabled && pointsToRedeem >= rule.pointsRequired) {
-        return rule.discountAmount;
-      }
-    }
-    if (settings.pointsRequired > 0) {
-      final tiers = (pointsToRedeem / settings.pointsRequired).floor();
-      return tiers * settings.discountValue;
-    }
-    return 0.0;
+    return ApiRepository.calculateLoyaltyDiscount(pointsToRedeem, settings, rules);
   }
 
-  RoundingResult getRoundingResult(double loyaltyDiscount) {
+  double calculateGst(BillingSettings billing, double totalAfterDiscount) {
+    if (!billing.gstEnabled || billing.gstRate <= 0) return 0.0;
+    return double.parse(((totalAfterDiscount * billing.gstRate) / 100).toStringAsFixed(2));
+  }
+
+  RoundingResult getRoundingResult(double loyaltyDiscount, {double gstAmount = 0.0}) {
     final totalAfterDiscount = (subtotal - manualDiscount - loyaltyDiscount).clamp(0.0, double.infinity);
-    return RoundingEngine.calculate(totalAfterDiscount, roundingMethod);
+    final totalWithTax = totalAfterDiscount + gstAmount;
+    return RoundingEngine.calculate(totalWithTax, roundingMethod);
   }
 
   CartState copyWith({
@@ -89,6 +95,7 @@ class CartState {
     RoundingMethod? roundingMethod,
     double? cashPaid,
     double? upiPaid,
+    double? cardPaid,
     bool? useAdvance,
     double? advanceUsed,
     double? pointsToRedeem,
@@ -101,6 +108,7 @@ class CartState {
       roundingMethod: roundingMethod ?? this.roundingMethod,
       cashPaid: cashPaid ?? this.cashPaid,
       upiPaid: upiPaid ?? this.upiPaid,
+      cardPaid: cardPaid ?? this.cardPaid,
       useAdvance: useAdvance ?? this.useAdvance,
       advanceUsed: advanceUsed ?? this.advanceUsed,
       pointsToRedeem: pointsToRedeem ?? this.pointsToRedeem,
@@ -179,10 +187,11 @@ class CartNotifier extends StateNotifier<CartState> {
     state = state.copyWith(roundingMethod: method);
   }
 
-  void setPayments({double? cash, double? upi, bool? useAdv, double? advUsed, double? loyaltyRedeem}) {
+  void setPayments({double? cash, double? upi, double? card, bool? useAdv, double? advUsed, double? loyaltyRedeem}) {
     state = state.copyWith(
       cashPaid: cash ?? state.cashPaid,
       upiPaid: upi ?? state.upiPaid,
+      cardPaid: card ?? state.cardPaid,
       useAdvance: useAdv ?? state.useAdvance,
       advanceUsed: advUsed ?? state.advanceUsed,
       pointsToRedeem: loyaltyRedeem ?? state.pointsToRedeem,

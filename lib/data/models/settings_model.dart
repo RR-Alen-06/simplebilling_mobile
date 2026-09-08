@@ -1,4 +1,4 @@
-class ShopSettings {
+﻿class ShopSettings {
   final String shopName;
   final String address;
   final String phone;
@@ -55,13 +55,13 @@ class BillingSettings {
   final String roundingMethod;
 
   BillingSettings({
-    this.billPrefix = 'INV',
-    this.billFormat = 'PREFIX-YYYYMM-SEQ',
+    this.billPrefix = 'BILL',
+    this.billFormat = 'BILL-{SEQ}',
     this.defaultPaymentMethod = 'Cash',
     this.currencySymbol = 'Rs.',
     this.decimalPrecision = 2,
     this.gstEnabled = false,
-    this.gstRate = 18.0,
+    this.gstRate = 0.0,
     this.defaultPrinterSize = '80mm',
     this.autoPrint = false,
     this.roundingMethod = 'None',
@@ -69,13 +69,13 @@ class BillingSettings {
 
   factory BillingSettings.fromJson(Map<String, dynamic> json) {
     return BillingSettings(
-      billPrefix: json['bill_prefix'] as String? ?? 'INV',
-      billFormat: json['bill_format'] as String? ?? 'PREFIX-YYYYMM-SEQ',
+      billPrefix: json['bill_prefix'] as String? ?? 'BILL',
+      billFormat: json['bill_format'] as String? ?? 'BILL-{SEQ}',
       defaultPaymentMethod: json['default_payment_method'] as String? ?? 'Cash',
       currencySymbol: json['currency_symbol'] as String? ?? 'Rs.',
       decimalPrecision: (json['decimal_precision'] as num?)?.toInt() ?? 2,
       gstEnabled: json['gst_enabled'] as bool? ?? false,
-      gstRate: (json['gst_rate'] as num?)?.toDouble() ?? 18.0,
+      gstRate: (json['gst_rate'] as num?)?.toDouble() ?? 0.0,
       defaultPrinterSize: json['default_printer_size'] as String? ?? '80mm',
       autoPrint: json['auto_print'] as bool? ?? false,
       roundingMethod: json['rounding_method'] as String? ?? 'None',
@@ -126,6 +126,50 @@ class LoyaltySettings {
   }
 }
 
+class LoyaltyRule {
+  final String id;
+  final String ruleName;
+  final double minBillAmount;
+  final double? maxBillAmount;
+  final double pointsEarned;
+  final bool enabled;
+  final int sortOrder;
+
+  LoyaltyRule({
+    required this.id,
+    required this.ruleName,
+    required this.minBillAmount,
+    this.maxBillAmount,
+    required this.pointsEarned,
+    this.enabled = true,
+    this.sortOrder = 0,
+  });
+
+  factory LoyaltyRule.fromJson(Map<String, dynamic> json) {
+    return LoyaltyRule(
+      id: json['id'] as String,
+      ruleName: json['rule_name'] as String? ?? 'Rule',
+      minBillAmount: (json['min_bill_amount'] as num?)?.toDouble() ?? 0.0,
+      maxBillAmount: (json['max_bill_amount'] as num?)?.toDouble(),
+      pointsEarned: (json['points_earned'] as num?)?.toDouble() ?? 1.0,
+      enabled: json['enabled'] as bool? ?? true,
+      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'rule_name': ruleName,
+      'min_bill_amount': minBillAmount,
+      if (maxBillAmount != null) 'max_bill_amount': maxBillAmount,
+      'points_earned': pointsEarned,
+      'enabled': enabled,
+      'sort_order': sortOrder,
+    };
+  }
+}
+
 class LoyaltyRedemptionRule {
   final String id;
   final double pointsRequired;
@@ -145,6 +189,41 @@ class LoyaltyRedemptionRule {
       pointsRequired: (json['points_required'] as num?)?.toDouble() ?? 0.0,
       discountAmount: (json['discount_amount'] as num?)?.toDouble() ?? 0.0,
       enabled: json['enabled'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'points_required': pointsRequired,
+      'discount_amount': discountAmount,
+      'enabled': enabled,
+    };
+  }
+}
+
+class SequenceConfigModel {
+  final String? id;
+  final String key;
+  final String prefix;
+  final int padding;
+  final int currentVal;
+
+  SequenceConfigModel({
+    this.id,
+    required this.key,
+    required this.prefix,
+    required this.padding,
+    required this.currentVal,
+  });
+
+  factory SequenceConfigModel.fromJson(Map<String, dynamic> json) {
+    return SequenceConfigModel(
+      id: json['id'] as String?,
+      key: json['key'] as String? ?? '',
+      prefix: json['prefix'] as String? ?? '',
+      padding: (json['padding'] as num?)?.toInt() ?? 6,
+      currentVal: (json['current_val'] as num?)?.toInt() ?? 0,
     );
   }
 }
