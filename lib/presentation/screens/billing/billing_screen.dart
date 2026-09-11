@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
 import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
-import 'package:simplebilling_mobile/core/utils/rounding_engine.dart';
 import 'package:simplebilling_mobile/data/models/bill_model.dart';
 import 'package:simplebilling_mobile/data/models/customer_model.dart';
 import 'package:simplebilling_mobile/data/models/product_model.dart';
@@ -605,8 +604,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                   Expanded(
                     child: cart.items.isEmpty
                         ? const Center(
-                            child: Text('Cart is empty
-Tap items or scan barcode to add', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary)),
+                            child: Text('Cart is empty\nTap items or scan barcode to add', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary)),
                           )
                         : ListView.separated(
                             padding: const EdgeInsets.all(8),

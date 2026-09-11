@@ -282,7 +282,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                       decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
-                                      child: Text(prod.productCode!, style: const TextStyle(fontSize: 10, color: Colors.black800)),
+                                      child: Text(prod.productCode!, style: const TextStyle(fontSize: 10, color: Colors.black87)),
                                     ),
                                   ),
                               ],

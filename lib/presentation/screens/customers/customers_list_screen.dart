@@ -274,7 +274,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                                                         child: Container(
                                                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                                           decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
-                                                          child: Text(cust.customerCode!, style: const TextStyle(fontSize: 10, color: Colors.black800)),
+                                                          child: Text(cust.customerCode!, style: const TextStyle(fontSize: 10, color: Colors.black87)),
                                                         ),
                                                       ),
                                                   ],

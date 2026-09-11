@@ -1,4 +1,3 @@
-﻿import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simplebilling_mobile/core/network/supabase_client.dart';
@@ -13,11 +12,6 @@ import 'package:simplebilling_mobile/data/models/settings_model.dart';
 
 class ApiRepository {
   static final _client = SupabaseConfig.client;
-
-  static String _getUserKey(String baseKey) {
-    final uid = _client.auth.currentUser?.id ?? 'guest';
-    return 'printpro-state:' + uid + ':' + baseKey;
-  }
 
   // --- ATOMIC SEQUENCE GENERATOR (ALIGNED WITH POSTGRES RPC & WEB APP) ---
   static Future<String> getNextSequence(String key) async {
@@ -623,6 +617,21 @@ class ApiRepository {
     } catch (e) {
       debugPrint('Error fetching settings: $e');
       return defaultSettings;
+    }
+  }
+
+  static Future<bool> saveSettings(AllSettings settings) async {
+    try {
+      await _client.from('settings').upsert([
+        {'key': 'shop', 'value': settings.shop.toJson()},
+        {'key': 'billing', 'value': settings.billing.toJson()},
+        {'key': 'loyalty', 'value': settings.loyalty.toJson()},
+      ]);
+      await logAudit(action: 'UPDATE_SETTINGS', entity: 'System & Shop Settings');
+      return true;
+    } catch (e) {
+      debugPrint('Error saving settings: $e');
+      return false;
     }
   }
 
