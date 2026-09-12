@@ -114,4 +114,35 @@ class WhatsAppSender {
       return false;
     }
   }
+
+  /// Send Customer Due Reminder via WhatsApp
+  static Future<bool> sendCustomerDueReminder({
+    required String phone,
+    required String customerName,
+    required double pendingBalance,
+    String? shopName,
+  }) async {
+    try {
+      final formattedPhone = formatPhoneNumber(phone);
+      final store = shopName?.isNotEmpty == true ? shopName! : 'SimpleBilling Store';
+      final text =
+          'Hello $customerName,\n\n'
+          'This is a friendly reminder from *$store* regarding your outstanding balance of *Rs. ${pendingBalance.toStringAsFixed(2)}*.\n\n'
+          'Kindly settle the balance at your earliest convenience. Thank you for your continued support!';
+
+      final encoded = Uri.encodeComponent(text);
+      final uri = formattedPhone.isNotEmpty
+          ? Uri.parse('https://wa.me/$formattedPhone?text=$encoded')
+          : Uri.parse('https://api.whatsapp.com/send?text=$encoded');
+
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error sending WhatsApp due reminder: $e');
+      return false;
+    }
+  }
 }

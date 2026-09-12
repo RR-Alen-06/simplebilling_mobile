@@ -7,6 +7,7 @@ import 'package:simplebilling_mobile/data/models/bill_model.dart';
 import 'package:simplebilling_mobile/data/models/customer_model.dart';
 import 'package:simplebilling_mobile/data/models/dashboard_stats_model.dart';
 import 'package:simplebilling_mobile/data/models/expense_model.dart';
+import 'package:simplebilling_mobile/data/models/payment_model.dart';
 import 'package:simplebilling_mobile/data/models/product_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 
@@ -244,6 +245,34 @@ class ApiRepository {
     }
   }
 
+  static Future<bool> updateProduct(
+    String id, {
+    required String name,
+    required String category,
+    required double price,
+  }) async {
+    try {
+      await _client
+          .from('products')
+          .update({
+            'name': name,
+            'category': category,
+            'price': price,
+          })
+          .eq('id', id);
+
+      await logAudit(
+        action: 'UPDATE_PRODUCT',
+        entity: 'Product $name',
+        newValue: 'Category: $category, Price: $price',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error updating product: $e');
+      return false;
+    }
+  }
+
   static Future<bool> deleteProduct(String id) async {
     try {
       await _client.from('products').delete().eq('id', id);
@@ -313,6 +342,275 @@ class ApiRepository {
     } catch (e) {
       debugPrint('Error deleting expense: $e');
       return false;
+    }
+  }
+
+  static Future<bool> updateExpense(
+    String id, {
+    required String title,
+    required double amount,
+    required String category,
+    String paymentMode = 'Cash',
+    String? notes,
+  }) async {
+    try {
+      await _client
+          .from('expenses')
+          .update({
+            'title': title,
+            'amount': amount,
+            'category': category,
+            'payment_mode': paymentMode,
+            'notes': notes,
+          })
+          .eq('id', id);
+
+      await logAudit(
+        action: 'UPDATE_EXPENSE',
+        entity: title,
+        newValue: 'Amount: $amount ($paymentMode)',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error updating expense: $e');
+      return false;
+    }
+  }
+
+  // --- PAYMENTS & TRANSACTIONS ---
+  static Future<List<PaymentModel>> getPayments() async {
+    try {
+      final response = await _client
+          .from('payments')
+          .select('*, customers(name, mobile)')
+          .order('created_at', ascending: false);
+
+      return (response as List).map((json) {
+        final cust = json['customers'] as Map<String, dynamic>?;
+        return PaymentModel.fromJson({
+          ...json,
+          'customer_name': cust?['name'],
+          'customer_mobile': cust?['mobile'],
+        });
+      }).toList();
+    } catch (e) {
+      debugPrint('Error fetching payments: $e');
+      return [];
+    }
+  }
+
+  static Future<PaymentModel?> recordCustomerPayment({
+    required String customerId,
+    required double amount,
+    required String paymentMethod,
+    String? billId,
+    String? notes,
+  }) async {
+    try {
+      final paymentNumber = await getNextSequence('PAYMENT');
+
+      final insertRes = await _client
+          .from('payments')
+          .insert({
+            'payment_number': paymentNumber,
+            'customer_id': customerId,
+            'bill_id': billId,
+            'amount': amount,
+            'payment_method': paymentMethod,
+            'notes': notes,
+          })
+          .select()
+          .single();
+
+      if (billId != null && billId.isNotEmpty) {
+        // Direct payment for a specific bill
+        final billRes = await _client
+            .from('bills')
+            .select('*')
+            .eq('id', billId)
+            .maybeSingle();
+
+        if (billRes != null) {
+          final currentPaid =
+              (billRes['paid_total'] as num?)?.toDouble() ?? 0.0;
+          final newPaidTotal = currentPaid + amount;
+          final updateData = <String, dynamic>{'paid_total': newPaidTotal};
+
+          if (paymentMethod == 'Cash') {
+            updateData['cash_paid'] =
+                ((billRes['cash_paid'] as num?)?.toDouble() ?? 0.0) + amount;
+          } else if (paymentMethod == 'UPI') {
+            updateData['upi_paid'] =
+                ((billRes['upi_paid'] as num?)?.toDouble() ?? 0.0) + amount;
+          }
+
+          await _client.from('bills').update(updateData).eq('id', billId);
+        }
+      } else {
+        // Customer-level payment: Apply FIFO to unpaid bills (oldest first)
+        final custBillsRes = await _client
+            .from('bills')
+            .select('*')
+            .eq('customer_id', customerId)
+            .order('created_at', ascending: true);
+
+        double unallocatedAmount = amount;
+        final custBills = (custBillsRes as List? ?? []);
+
+        for (final b in custBills) {
+          if (unallocatedAmount <= 0) break;
+
+          final grandTotal = (b['grand_total'] as num?)?.toDouble() ?? 0.0;
+          final paidTotal = (b['paid_total'] as num?)?.toDouble() ?? 0.0;
+          final remaining = (grandTotal - paidTotal).clamp(0.0, double.infinity);
+
+          if (remaining > 0) {
+            final allocation =
+                remaining < unallocatedAmount ? remaining : unallocatedAmount;
+            final newPaidTotal = paidTotal + allocation;
+            unallocatedAmount -= allocation;
+
+            final updateData = <String, dynamic>{'paid_total': newPaidTotal};
+            if (paymentMethod == 'Cash') {
+              updateData['cash_paid'] =
+                  ((b['cash_paid'] as num?)?.toDouble() ?? 0.0) + allocation;
+            } else if (paymentMethod == 'UPI') {
+              updateData['upi_paid'] =
+                  ((b['upi_paid'] as num?)?.toDouble() ?? 0.0) + allocation;
+            }
+
+            await _client.from('bills').update(updateData).eq('id', b['id']);
+          }
+        }
+
+        // If leftover payment remains after clearing bills, credit to customer's advance_balance
+        if (unallocatedAmount > 0) {
+          final custRes = await _client
+              .from('customers')
+              .select('advance_balance')
+              .eq('id', customerId)
+              .single();
+          final currentAdvance =
+              (custRes['advance_balance'] as num?)?.toDouble() ?? 0.0;
+          await _client
+              .from('customers')
+              .update({'advance_balance': currentAdvance + unallocatedAmount})
+              .eq('id', customerId);
+        }
+      }
+
+      await logAudit(
+        action: 'RECORD_PAYMENT',
+        entity: 'Payment $paymentNumber (₹$amount via $paymentMethod)',
+        newValue: notes,
+      );
+
+      return PaymentModel.fromJson(insertRes);
+    } catch (e) {
+      debugPrint('Error recording payment: $e');
+      return null;
+    }
+  }
+
+  // --- CUSTOMER LEDGER COMPUTATION ---
+  static Future<List<CustomerLedgerEntryModel>> getCustomerLedger(
+    String customerId,
+  ) async {
+    try {
+      final billsRes = await _client
+          .from('bills')
+          .select('*')
+          .eq('customer_id', customerId)
+          .order('created_at', ascending: true);
+
+      final paymentsRes = await _client
+          .from('payments')
+          .select('*')
+          .eq('customer_id', customerId)
+          .order('created_at', ascending: true);
+
+      final bills = (billsRes as List? ?? []);
+      final payments = (paymentsRes as List? ?? []);
+
+      final rawEvents = <Map<String, dynamic>>[];
+      final paymentBillIds = payments
+          .map((p) => p['bill_id'])
+          .where((id) => id != null)
+          .toSet();
+
+      for (final b in bills) {
+        final hasPaymentRecord = paymentBillIds.contains(b['id']);
+        final paidTotal = (b['paid_total'] as num?)?.toDouble() ?? 0.0;
+        final advanceUsed = (b['advance_used'] as num?)?.toDouble() ?? 0.0;
+        final directPaidForBill = hasPaymentRecord
+            ? 0.0
+            : (paidTotal - advanceUsed).clamp(0.0, double.infinity);
+        final effectivePaidOnBill = advanceUsed + directPaidForBill;
+
+        rawEvents.add({
+          'date': b['created_at'] ?? '',
+          'type': 'BILL',
+          'reference_no': b['bill_number'] ?? 'BILL',
+          'description': 'Bill generated (${b['payment_method'] ?? 'N/A'})',
+          'bill_amount': (b['grand_total'] as num?)?.toDouble() ?? 0.0,
+          'paid_amount': effectivePaidOnBill,
+          'advance_used': advanceUsed,
+          'loyalty_points':
+              (b['loyalty_points_earned'] as num?)?.toDouble() ?? 0.0,
+        });
+      }
+
+      for (final p in payments) {
+        rawEvents.add({
+          'date': p['created_at'] ?? '',
+          'type': 'PAYMENT',
+          'reference_no': p['payment_number'] ?? 'PAY',
+          'description':
+              p['notes'] ?? 'Payment received via ${p['payment_method'] ?? 'Cash'}',
+          'bill_amount': 0.0,
+          'paid_amount': (p['amount'] as num?)?.toDouble() ?? 0.0,
+          'advance_used': 0.0,
+          'loyalty_points': 0.0,
+        });
+      }
+
+      rawEvents.sort((a, b) {
+        final tA =
+            DateTime.tryParse(a['date'].toString())?.millisecondsSinceEpoch ?? 0;
+        final tB =
+            DateTime.tryParse(b['date'].toString())?.millisecondsSinceEpoch ?? 0;
+        return tA.compareTo(tB);
+      });
+
+      double runningBalance = 0.0;
+      final entries = <CustomerLedgerEntryModel>[];
+
+      for (int i = 0; i < rawEvents.length; i++) {
+        final evt = rawEvents[i];
+        final bAmt = evt['bill_amount'] as double;
+        final pAmt = evt['paid_amount'] as double;
+        runningBalance = runningBalance + bAmt - pAmt;
+
+        entries.add(
+          CustomerLedgerEntryModel(
+            id: 'ledger-$i',
+            date: evt['date'] as String,
+            type: evt['type'] as String,
+            referenceNo: evt['reference_no'] as String,
+            description: evt['description'] as String,
+            billAmount: bAmt,
+            paidAmount: pAmt,
+            advanceUsed: evt['advance_used'] as double,
+            loyaltyPoints: evt['loyalty_points'] as double,
+            runningBalance: runningBalance,
+          ),
+        );
+      }
+
+      return entries;
+    } catch (e) {
+      debugPrint('Error getting customer ledger: $e');
+      return [];
     }
   }
 

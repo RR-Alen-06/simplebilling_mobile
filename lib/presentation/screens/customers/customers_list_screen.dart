@@ -6,6 +6,7 @@ import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
 import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
+import 'package:simplebilling_mobile/presentation/screens/customers/customer_details_screen.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/sync_status_badge.dart';
 import 'package:simplebilling_mobile/providers/billing_provider.dart';
 
@@ -310,137 +311,159 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Row(
-                                        children: [
-                                          CircleAvatar(
-                                            backgroundColor: AppColors.primary
-                                                .withValues(alpha: 0.1),
-                                            child: Text(
-                                              cust.name.isNotEmpty
-                                                  ? cust.name[0].toUpperCase()
-                                                  : 'C',
-                                              style: const TextStyle(
-                                                color: AppColors.primary,
-                                                fontWeight: FontWeight.bold,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (ctx) =>
+                                      CustomerDetailsScreen(customer: cust),
+                                ),
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Row(
+                                          children: [
+                                            CircleAvatar(
+                                              backgroundColor: AppColors.primary
+                                                  .withValues(alpha: 0.1),
+                                              child: Text(
+                                                cust.name.isNotEmpty
+                                                    ? cust.name[0].toUpperCase()
+                                                    : 'C',
+                                                style: const TextStyle(
+                                                  color: AppColors.primary,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  children: [
-                                                    Text(
-                                                      cust.name,
-                                                      style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                    if (cust.customerCode !=
-                                                        null)
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsets.only(
-                                                              left: 6,
-                                                            ),
-                                                        child: Container(
-                                                          padding:
-                                                              const EdgeInsets.symmetric(
-                                                                horizontal: 5,
-                                                                vertical: 1,
-                                                              ),
-                                                          decoration: BoxDecoration(
-                                                            color: Colors
-                                                                .grey[200],
-                                                            borderRadius:
-                                                                BorderRadius.circular(
-                                                                  4,
-                                                                ),
-                                                          ),
-                                                          child: Text(
-                                                            cust.customerCode!,
-                                                            style:
-                                                                const TextStyle(
-                                                                  fontSize: 10,
-                                                                  color: Colors
-                                                                      .black87,
-                                                                ),
-                                                          ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Text(
+                                                        cust.name,
+                                                        style: const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 14,
                                                         ),
                                                       ),
-                                                  ],
-                                                ),
-                                                Text(
-                                                  cust.mobile != null &&
-                                                          cust
-                                                              .mobile!
-                                                              .isNotEmpty
-                                                      ? cust.mobile!
-                                                      : 'No mobile registered',
-                                                  style: const TextStyle(
-                                                    color:
-                                                        AppColors.textSecondary,
-                                                    fontSize: 12,
+                                                      if (cust.customerCode !=
+                                                          null)
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsets.only(
+                                                                left: 6,
+                                                              ),
+                                                          child: Container(
+                                                            padding:
+                                                                const EdgeInsets.symmetric(
+                                                                  horizontal: 5,
+                                                                  vertical: 1,
+                                                                ),
+                                                            decoration: BoxDecoration(
+                                                              color: Colors
+                                                                  .grey[200],
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    4,
+                                                                  ),
+                                                            ),
+                                                            child: Text(
+                                                              cust.customerCode!,
+                                                              style:
+                                                                  const TextStyle(
+                                                                    fontSize: 10,
+                                                                    color: Colors
+                                                                        .black87,
+                                                                  ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ],
                                                   ),
-                                                ),
-                                              ],
+                                                  Text(
+                                                    cust.mobile != null &&
+                                                            cust
+                                                                .mobile!
+                                                                .isNotEmpty
+                                                        ? cust.mobile!
+                                                        : 'No mobile registered',
+                                                    style: const TextStyle(
+                                                      color:
+                                                          AppColors.textSecondary,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
+                                          ],
+                                        ),
+                                      ),
+                                      Row(
+                                        children: [
+                                          SyncStatusBadge(status: syncStatus),
+                                          const SizedBox(width: 4),
+                                          const Icon(
+                                            Icons.chevron_right,
+                                            color: AppColors.textSecondary,
+                                            size: 20,
                                           ),
                                         ],
                                       ),
-                                    ),
-                                    SyncStatusBadge(status: syncStatus),
-                                  ],
-                                ),
-                                const Divider(height: 16),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    _buildStatBadge(
-                                      label: 'Balance Due',
-                                      value: Formatters.currency(
-                                        cust.balanceDue,
+                                    ],
+                                  ),
+                                  const Divider(height: 16),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      _buildStatBadge(
+                                        label: 'Balance Due',
+                                        value: Formatters.currency(
+                                          cust.balanceDue,
+                                        ),
+                                        color: cust.balanceDue > 0
+                                            ? AppColors.error
+                                            : AppColors.textSecondary,
                                       ),
-                                      color: cust.balanceDue > 0
-                                          ? AppColors.error
-                                          : AppColors.textSecondary,
-                                    ),
-                                    _buildStatBadge(
-                                      label: 'Advance Deposit',
-                                      value: Formatters.currency(
-                                        cust.advanceBalance,
+                                      _buildStatBadge(
+                                        label: 'Advance Deposit',
+                                        value: Formatters.currency(
+                                          cust.advanceBalance,
+                                        ),
+                                        color: cust.advanceBalance > 0
+                                            ? AppColors.success
+                                            : AppColors.textSecondary,
                                       ),
-                                      color: cust.advanceBalance > 0
-                                          ? AppColors.success
-                                          : AppColors.textSecondary,
-                                    ),
-                                    _buildStatBadge(
-                                      label: 'Loyalty Points',
-                                      value:
-                                          '${cust.loyaltyPoints.toStringAsFixed(0)} pts',
-                                      color: cust.loyaltyPoints > 0
-                                          ? Colors.orange[800]!
-                                          : AppColors.textSecondary,
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                      _buildStatBadge(
+                                        label: 'Loyalty Points',
+                                        value:
+                                            '${cust.loyaltyPoints.toStringAsFixed(0)} pts',
+                                        color: cust.loyaltyPoints > 0
+                                            ? Colors.orange[800]!
+                                            : AppColors.textSecondary,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         );

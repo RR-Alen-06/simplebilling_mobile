@@ -5,6 +5,7 @@ import 'package:simplebilling_mobile/core/constants/app_colors.dart';
 import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
 import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
+import 'package:simplebilling_mobile/data/models/product_model.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/sync_status_badge.dart';
 import 'package:simplebilling_mobile/providers/billing_provider.dart';
@@ -180,6 +181,117 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
     );
   }
 
+  void _showEditProductDialog(ProductModel prod) {
+    final nameCtrl = TextEditingController(text: prod.name);
+    final priceCtrl = TextEditingController(text: prod.price.toStringAsFixed(2));
+    String category = prod.category;
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Edit Product', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Product Name *', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: categoriesList.contains(category) ? category : categoriesList[1],
+                  decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
+                  items: categoriesList.where((c) => c != 'All').map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (v) {
+                    if (v != null) setDialogState(() => category = v);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: priceCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Price (₹) *', prefixText: '₹ ', border: OutlineInputBorder()),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final name = nameCtrl.text.trim();
+                      final price = double.tryParse(priceCtrl.text) ?? 0.0;
+                      if (name.isEmpty || price < 0) return;
+
+                      setDialogState(() => isSaving = true);
+                      final messenger = ScaffoldMessenger.of(context);
+                      final nav = Navigator.of(ctx);
+
+                      final ok = await ApiRepository.updateProduct(prod.id, name: name, category: category, price: price);
+                      if (mounted) {
+                        nav.pop();
+                        if (ok) {
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Product "$name" updated!')),
+                          );
+                          ref.invalidate(productsProvider);
+                        }
+                      }
+                    },
+              child: Text(isSaving ? 'Saving...' : 'Save Changes'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleSeedCatalog() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Seed Default Catalog'),
+        content: const Text(
+          'This will populate the standard Xerox, Printing, Lamination, and Stationery product catalog and demo customers from the web app. Proceed?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Seed Catalog'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Seeding default catalog...')),
+      );
+      await ApiRepository.seedDefaultCatalogAndCustomers();
+      ref.invalidate(productsProvider);
+      ref.invalidate(customersProvider);
+      ref.invalidate(customerSummariesProvider);
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Default catalog seeded successfully!')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final productsAsync = ref.watch(productsProvider);
@@ -194,6 +306,11 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.cloud_download_outlined, color: AppColors.primary),
+            tooltip: 'Seed Default Catalog',
+            onPressed: _handleSeedCatalog,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.primary),
             onPressed: () => ref.invalidate(productsProvider),
@@ -330,6 +447,18 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                                 color: AppColors.textSecondary,
                               ),
                             ),
+                            if (_searchTerm.isEmpty) ...[
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                ),
+                                icon: const Icon(Icons.cloud_download),
+                                label: const Text('Seed Standard 21 Products'),
+                                onPressed: _handleSeedCatalog,
+                              ),
+                            ],
                           ],
                         ),
                       );
@@ -412,6 +541,15 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 SyncStatusBadge(status: syncStatus),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 20,
+                                    color: AppColors.primary,
+                                  ),
+                                  tooltip: 'Edit Product',
+                                  onPressed: () => _showEditProductDialog(prod),
+                                ),
                                 IconButton(
                                   icon: const Icon(
                                     Icons.delete_outline,

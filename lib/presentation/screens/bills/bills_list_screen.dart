@@ -7,6 +7,7 @@ import 'package:simplebilling_mobile/core/utils/formatters.dart';
 import 'package:simplebilling_mobile/data/models/bill_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 import 'package:simplebilling_mobile/presentation/shared/printing/receipt_generator.dart';
+import 'package:simplebilling_mobile/presentation/shared/widgets/invoice_details_modal.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/sync_status_badge.dart';
 import 'package:simplebilling_mobile/providers/billing_provider.dart';
 
@@ -341,6 +342,7 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
                               horizontal: 16,
                               vertical: 6,
                             ),
+                            onTap: () => InvoiceDetailsModal.show(context, bill),
                             title: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [

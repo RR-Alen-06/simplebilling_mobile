@@ -4,6 +4,7 @@ import 'package:simplebilling_mobile/presentation/screens/dashboard/dashboard_sc
 import 'package:simplebilling_mobile/presentation/screens/billing/billing_screen.dart';
 import 'package:simplebilling_mobile/presentation/screens/bills/bills_list_screen.dart';
 import 'package:simplebilling_mobile/presentation/screens/customers/customers_list_screen.dart';
+import 'package:simplebilling_mobile/presentation/screens/payments/payments_screen.dart';
 import 'package:simplebilling_mobile/presentation/screens/products/products_screen.dart';
 import 'package:simplebilling_mobile/presentation/screens/expenses/expenses_screen.dart';
 import 'package:simplebilling_mobile/presentation/screens/reports/reports_screen.dart';
@@ -31,6 +32,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
       const BillingScreen(),
       const BillsListScreen(),
       const CustomersListScreen(),
+      const PaymentsScreen(),
       const ProductsScreen(),
       const ExpensesScreen(),
       const ReportsScreen(),
@@ -63,6 +65,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                           NavigationRailDestination(icon: Icon(Icons.point_of_sale_outlined), selectedIcon: Icon(Icons.point_of_sale), label: Text('Billing')),
                           NavigationRailDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: Text('Bills')),
                           NavigationRailDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: Text('Customers')),
+                          NavigationRailDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: Text('Payments')),
                           NavigationRailDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: Text('Products')),
                           NavigationRailDestination(icon: Icon(Icons.money_off_outlined), selectedIcon: Icon(Icons.money_off), label: Text('Expenses')),
                           NavigationRailDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: Text('Reports')),
@@ -92,9 +95,9 @@ class _MainShellScreenState extends State<MainShellScreen> {
             children: _screens,
           ),
           bottomNavigationBar: NavigationBar(
-            selectedIndex: _currentIndex < 5 ? _currentIndex : 4,
+            selectedIndex: _currentIndex < 5 ? _currentIndex : 5,
             onDestinationSelected: (idx) {
-              if (idx == 4) {
+              if (idx == 5) {
                 // Show Drawer / More Options for remaining screens
                 _showMoreOptionsSheet(context);
               } else {
@@ -108,6 +111,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
               NavigationDestination(icon: Icon(Icons.point_of_sale_outlined), selectedIcon: Icon(Icons.point_of_sale, color: AppColors.primary), label: 'POS'),
               NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long, color: AppColors.primary), label: 'Bills'),
               NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people, color: AppColors.primary), label: 'Customers'),
+              NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet, color: AppColors.primary), label: 'Payments'),
               NavigationDestination(icon: Icon(Icons.grid_view), selectedIcon: Icon(Icons.grid_view, color: AppColors.primary), label: 'More'),
             ],
           ),
@@ -130,7 +134,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 title: const Text('Products & Catalog', style: TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  setState(() => _currentIndex = 4);
+                  setState(() => _currentIndex = 5);
                 },
               ),
               ListTile(
@@ -138,7 +142,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 title: const Text('Shop Expenses', style: TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  setState(() => _currentIndex = 5);
+                  setState(() => _currentIndex = 6);
                 },
               ),
               ListTile(
@@ -146,7 +150,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 title: const Text('Reports & Analytics', style: TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  setState(() => _currentIndex = 6);
+                  setState(() => _currentIndex = 7);
                 },
               ),
               ListTile(
@@ -154,7 +158,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 title: const Text('Audit Trail & Logs', style: TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  setState(() => _currentIndex = 7);
+                  setState(() => _currentIndex = 8);
                 },
               ),
               ListTile(
@@ -162,7 +166,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 title: const Text('Settings & Profile', style: TextStyle(fontWeight: FontWeight.bold)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  setState(() => _currentIndex = 8);
+                  setState(() => _currentIndex = 9);
                 },
               ),
             ],

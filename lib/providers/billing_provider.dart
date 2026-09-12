@@ -1,5 +1,6 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/customer_model.dart';
+import '../data/models/payment_model.dart';
 import '../data/models/product_model.dart';
 import '../data/models/bill_model.dart';
 import '../data/models/settings_model.dart';
@@ -16,6 +17,10 @@ final customersProvider = FutureProvider<List<CustomerModel>>((ref) async {
 
 final customerSummariesProvider = FutureProvider<List<CustomerModel>>((ref) async {
   return await ApiRepository.getCustomerSummaries();
+});
+
+final paymentsProvider = FutureProvider<List<PaymentModel>>((ref) async {
+  return await ApiRepository.getPayments();
 });
 
 final productsProvider = FutureProvider<List<ProductModel>>((ref) async {
