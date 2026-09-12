@@ -97,11 +97,12 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
               const SizedBox(height: 10),
               TextField(
                 controller: advanceCtrl,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
-                  labelText: 'Initial Advance Deposit (Rs.)',
+                  labelText: 'Initial Advance Deposit (₹)',
                   border: OutlineInputBorder(),
-                  isDense: true,
                 ),
               ),
             ],

@@ -105,9 +105,12 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: priceCtrl,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
-                    labelText: 'Selling Rate (Rs.) *',
+                    labelText: 'Selling Rate (₹) *',
+                    prefixText: '₹ ',
                     border: OutlineInputBorder(),
                     isDense: true,
                   ),

@@ -97,11 +97,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      'PrintPro ERP',
+                      'SimpleBilling POS',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: AppColors.textPrimary),
                     ),
                     const Text(
-                      'Fast & Secure Billing App',
+                      'Smart Cloud Point of Sale & Billing',
                       style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     ),
                     const SizedBox(height: 24),

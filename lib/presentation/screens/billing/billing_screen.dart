@@ -21,13 +21,9 @@ class BillingScreen extends ConsumerStatefulWidget {
 }
 
 class _BillingScreenState extends ConsumerState<BillingScreen> {
-  final TextEditingController _customNameCtrl = TextEditingController(
-    text: 'A4 B&W Single',
-  );
+  final TextEditingController _customNameCtrl = TextEditingController();
   final TextEditingController _customQtyCtrl = TextEditingController(text: '1');
-  final TextEditingController _customPriceCtrl = TextEditingController(
-    text: '2.00',
-  );
+  final TextEditingController _customPriceCtrl = TextEditingController();
 
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
@@ -67,7 +63,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
     ref.read(cartProvider.notifier).addItem(name, price, qty);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Added "$name" ($qty x Rs. $price)'),
+        content: Text('Added "$name" ($qty x ₹$price)'),
         duration: const Duration(milliseconds: 600),
       ),
     );
@@ -88,7 +84,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Scanned & Added: ${product.name} (Rs. ${product.price})',
+              'Scanned & Added: ${product.name} (₹${product.price})',
             ),
           ),
         );
@@ -514,7 +510,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                                                   BorderRadius.circular(4),
                                             ),
                                             child: Text(
-                                              'Due: Rs.${c.balanceDue.toStringAsFixed(0)}',
+                                              'Due: ₹${c.balanceDue.toStringAsFixed(0)}',
                                               style: const TextStyle(
                                                 color: AppColors.error,
                                                 fontSize: 11,
@@ -538,7 +534,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                                                   BorderRadius.circular(4),
                                             ),
                                             child: Text(
-                                              'Adv: Rs.${c.advanceBalance.toStringAsFixed(0)}',
+                                              'Adv: ₹${c.advanceBalance.toStringAsFixed(0)}',
                                               style: const TextStyle(
                                                 color: AppColors.success,
                                                 fontSize: 11,
@@ -605,22 +601,29 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                   ),
                 ),
 
-                // Quick Xerox / Print Chips
+                // Quick Product Chips (Dynamic from Catalog or Fallback)
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Row(
-                    children: [
-                      _buildPresetChip('A4 B&W Single', 2.00),
-                      const SizedBox(width: 6),
-                      _buildPresetChip('A4 B&W B2B', 3.00),
-                      const SizedBox(width: 6),
-                      _buildPresetChip('A4 Color', 10.00),
-                      const SizedBox(width: 6),
-                      _buildPresetChip('Spiral Binding', 40.00),
-                      const SizedBox(width: 6),
-                      _buildPresetChip('Lamination', 30.00),
-                    ],
+                    children: products.isNotEmpty
+                        ? products.take(8).map((p) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: _buildPresetChip(p.name, p.price),
+                            );
+                          }).toList()
+                        : [
+                            _buildPresetChip('A4 B&W Single', 2.00),
+                            const SizedBox(width: 6),
+                            _buildPresetChip('A4 B&W B2B', 3.00),
+                            const SizedBox(width: 6),
+                            _buildPresetChip('A4 Color', 10.00),
+                            const SizedBox(width: 6),
+                            _buildPresetChip('Spiral Binding', 40.00),
+                            const SizedBox(width: 6),
+                            _buildPresetChip('Lamination', 30.00),
+                          ],
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -853,7 +856,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                                           ),
                                         ),
                                         Text(
-                                          'Rs.${item.price.toStringAsFixed(2)} each',
+                                          '₹${item.price.toStringAsFixed(2)} each',
                                           style: const TextStyle(
                                             color: AppColors.textSecondary,
                                             fontSize: 11,
@@ -1023,7 +1026,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                                 controller: _cashCtrl,
                                 keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
-                                  labelText: 'Cash Paid (Rs.)',
+                                  labelText: 'Cash Paid (₹)',
                                   isDense: true,
                                   border: OutlineInputBorder(),
                                 ),
@@ -1035,7 +1038,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                                 controller: _upiCtrl,
                                 keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
-                                  labelText: 'UPI Paid (Rs.)',
+                                  labelText: 'UPI Paid (₹)',
                                   isDense: true,
                                   border: OutlineInputBorder(),
                                 ),
@@ -1094,7 +1097,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
   Widget _buildPresetChip(String title, double price) {
     return ActionChip(
       avatar: const Icon(Icons.print, size: 16, color: AppColors.primary),
-      label: Text('$title (Rs.$price)'),
+      label: Text('$title (₹${price.toStringAsFixed(price % 1 == 0 ? 0 : 2)})'),
       backgroundColor: Colors.white,
       side: const BorderSide(color: AppColors.border),
       onPressed: () => _addQuickPreset(title, price),

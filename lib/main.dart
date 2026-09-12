@@ -78,7 +78,7 @@ class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'PrintPro ERP & Billing',
+      title: 'SimpleBilling - Mobile POS',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
