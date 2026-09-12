@@ -27,13 +27,22 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
     super.dispose();
   }
 
-  SyncStatus _getBillSyncStatus(String? clientRef, String id, String billNumber, List<SyncTask> tasks) {
+  SyncStatus _getBillSyncStatus(
+    String? clientRef,
+    String id,
+    String billNumber,
+    List<SyncTask> tasks,
+  ) {
     for (final task in tasks) {
       if (task.action == 'create_bill') {
-        if ((clientRef != null && task.clientRef == clientRef) || task.id == id || task.clientRef == id) {
+        if ((clientRef != null && task.clientRef == clientRef) ||
+            task.id == id ||
+            task.clientRef == id) {
           return task.status;
         }
-        final taskBillNum = task.payload['billData']?['bill_number'] ?? task.payload['bill_number'];
+        final taskBillNum =
+            task.payload['billData']?['bill_number'] ??
+            task.payload['bill_number'];
         if (taskBillNum == billNumber) {
           return task.status;
         }
@@ -42,7 +51,11 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
     return SyncStatus.synced;
   }
 
-  void _showPrintOptionsDialog(BillModel bill, ShopSettings shop, BillingSettings billing) {
+  void _showPrintOptionsDialog(
+    BillModel bill,
+    ShopSettings shop,
+    BillingSettings billing,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -58,16 +71,31 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Grand Total: ${Formatters.currency(bill.grandTotal)} (${bill.paymentMethod})',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Grand Total: ${Formatters.currency(bill.grandTotal)} (${bill.paymentMethod})',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 4),
-            Text('Date: ${Formatters.parseAndFormatDate(bill.createdAt)}',
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+            Text(
+              'Date: ${Formatters.parseAndFormatDate(bill.createdAt)}',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
             if (bill.customerName != null)
-              Text('Customer: ${bill.customerName} (${bill.customerMobile ?? "-"})',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              Text(
+                'Customer: ${bill.customerName} (${bill.customerMobile ?? "-"})',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
             const SizedBox(height: 16),
-            const Text('Share & Print Options:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const Text(
+              'Share & Print Options:',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
           ],
         ),
         actions: [
@@ -76,11 +104,18 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF25D366),
+              foregroundColor: Colors.white,
+            ),
             icon: const Icon(Icons.chat, size: 16),
             label: const Text('WhatsApp Invoice'),
             onPressed: () async {
-              await ReceiptGenerator.shareViaWhatsApp(bill: bill, shop: shop, billing: billing);
+              await ReceiptGenerator.shareViaWhatsApp(
+                bill: bill,
+                shop: shop,
+                billing: billing,
+              );
             },
           ),
           OutlinedButton.icon(
@@ -88,16 +123,28 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
             label: const Text('A4 Invoice'),
             onPressed: () async {
               Navigator.of(ctx).pop();
-              await ReceiptGenerator.printReceipt(bill: bill, shop: shop, billing: billing, forceA4: true);
+              await ReceiptGenerator.printReceipt(
+                bill: bill,
+                shop: shop,
+                billing: billing,
+                forceA4: true,
+              );
             },
           ),
           ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
             icon: const Icon(Icons.print, size: 16),
             label: const Text('Print 80mm POS'),
             onPressed: () async {
               Navigator.of(ctx).pop();
-              await ReceiptGenerator.printReceipt(bill: bill, shop: shop, billing: billing);
+              await ReceiptGenerator.printReceipt(
+                bill: bill,
+                shop: shop,
+                billing: billing,
+              );
             },
           ),
         ],
@@ -108,7 +155,9 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
   @override
   Widget build(BuildContext context) {
     final billsAsync = ref.watch(billsListProvider);
-    final settings = ref.watch(settingsProvider).value ?? AllSettings(
+    final settings =
+        ref.watch(settingsProvider).value ??
+        AllSettings(
           shop: ShopSettings(),
           billing: BillingSettings(),
           loyalty: LoyaltySettings(),
@@ -117,15 +166,26 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Manage Bills', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text(
+          'Manage Bills',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
           ValueListenableBuilder<List<SyncTask>>(
             valueListenable: SyncQueueManager.instance.tasksNotifier,
             builder: (context, tasks, child) {
-              final pendingCount = tasks.where((t) => t.status == SyncStatus.pending || t.status == SyncStatus.syncing).length;
-              final failedCount = tasks.where((t) => t.status == SyncStatus.failed).length;
+              final pendingCount = tasks
+                  .where(
+                    (t) =>
+                        t.status == SyncStatus.pending ||
+                        t.status == SyncStatus.syncing,
+                  )
+                  .length;
+              final failedCount = tasks
+                  .where((t) => t.status == SyncStatus.failed)
+                  .length;
 
               if (failedCount > 0) {
                 return IconButton(
@@ -183,8 +243,14 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
                     : null,
                 filled: true,
                 fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                  horizontal: 16,
+                ),
               ),
               onChanged: (v) => setState(() => _searchTerm = v),
             ),
@@ -194,12 +260,17 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
               valueListenable: SyncQueueManager.instance.tasksNotifier,
               builder: (ctx, tasks, _) {
                 return billsAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
                   error: (err, _) => Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                        const Icon(
+                          Icons.error_outline,
+                          size: 48,
+                          color: AppColors.error,
+                        ),
                         const SizedBox(height: 8),
                         Text('Error loading bills: $err'),
                         const SizedBox(height: 12),
@@ -215,7 +286,8 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
                       if (_searchTerm.isEmpty) return true;
                       final q = _searchTerm.toLowerCase();
                       return b.billNumber.toLowerCase().contains(q) ||
-                          (b.customerName != null && b.customerName!.toLowerCase().contains(q)) ||
+                          (b.customerName != null &&
+                              b.customerName!.toLowerCase().contains(q)) ||
                           b.paymentMethod.toLowerCase().contains(q);
                     }).toList();
 
@@ -224,11 +296,19 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.receipt_long_outlined, size: 48, color: AppColors.textSecondary),
+                            const Icon(
+                              Icons.receipt_long_outlined,
+                              size: 48,
+                              color: AppColors.textSecondary,
+                            ),
                             const SizedBox(height: 8),
                             Text(
-                              _searchTerm.isEmpty ? 'No bills generated yet' : 'No bills matching "$_searchTerm"',
-                              style: const TextStyle(color: AppColors.textSecondary),
+                              _searchTerm.isEmpty
+                                  ? 'No bills generated yet'
+                                  : 'No bills matching "$_searchTerm"',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ],
                         ),
@@ -236,46 +316,78 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
                     }
 
                     return ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (ctx, i) {
                         final bill = filtered[i];
-                        final syncStatus = _getBillSyncStatus(bill.clientRef, bill.id, bill.billNumber, tasks);
+                        final syncStatus = _getBillSyncStatus(
+                          bill.clientRef,
+                          bill.id,
+                          bill.billNumber,
+                          tasks,
+                        );
 
                         return Card(
                           elevation: 0.5,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
                             title: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(bill.billNumber, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                Text(
+                                  bill.billNumber,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
                                 Text(
                                   Formatters.currency(bill.grandTotal),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.primary),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: AppColors.primary,
+                                  ),
                                 ),
                               ],
                             ),
                             subtitle: Padding(
                               padding: const EdgeInsets.only(top: 4),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        bill.customerName != null && bill.customerName!.isNotEmpty
+                                        bill.customerName != null &&
+                                                bill.customerName!.isNotEmpty
                                             ? 'Customer: ${bill.customerName}'
                                             : 'Walk-in Customer',
-                                        style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textPrimary,
+                                        ),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
                                         '${Formatters.parseAndFormatDate(bill.createdAt)} • ${bill.paymentMethod}',
-                                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                                        style: const TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 11,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -284,9 +396,16 @@ class _BillsListScreenState extends ConsumerState<BillsListScreen> {
                               ),
                             ),
                             trailing: IconButton(
-                              icon: const Icon(Icons.share, color: AppColors.primary),
+                              icon: const Icon(
+                                Icons.share,
+                                color: AppColors.primary,
+                              ),
                               tooltip: 'Print or WhatsApp Invoice',
-                              onPressed: () => _showPrintOptionsDialog(bill, settings.shop, settings.billing),
+                              onPressed: () => _showPrintOptionsDialog(
+                                bill,
+                                settings.shop,
+                                settings.billing,
+                              ),
                             ),
                           ),
                         );

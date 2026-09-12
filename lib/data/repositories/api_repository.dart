@@ -16,7 +16,10 @@ class ApiRepository {
   // --- ATOMIC SEQUENCE GENERATOR (ALIGNED WITH POSTGRES RPC & WEB APP) ---
   static Future<String> getNextSequence(String key) async {
     try {
-      final res = await _client.rpc('get_next_sequence', params: {'p_key': key.toUpperCase()});
+      final res = await _client.rpc(
+        'get_next_sequence',
+        params: {'p_key': key.toUpperCase()},
+      );
       if (res != null && res.toString().isNotEmpty) {
         return res.toString();
       }
@@ -52,8 +55,12 @@ class ApiRepository {
       return '$prefix-${nextVal.toString().padLeft(padding, '0')}';
     } catch (e) {
       // Fallback timestamp code when offline or no permission
-      final suffix = DateTime.now().millisecondsSinceEpoch.toString().substring(7);
-      final pfx = key.substring(0, key.length < 3 ? key.length : 3).toUpperCase();
+      final suffix = DateTime.now().millisecondsSinceEpoch.toString().substring(
+        7,
+      );
+      final pfx = key
+          .substring(0, key.length < 3 ? key.length : 3)
+          .toUpperCase();
       return '$pfx-$suffix';
     }
   }
@@ -66,7 +73,7 @@ class ApiRepository {
       final uid = _client.auth.currentUser?.id;
       if (uid != null) {
         for (final k in keys) {
-          if (k.startsWith('printpro-state:' + uid)) {
+          if (k.startsWith('printpro-state:$uid')) {
             await prefs.remove(k);
           }
         }
@@ -80,8 +87,13 @@ class ApiRepository {
   // --- CUSTOMERS & RUNNING DUES LEDGER ---
   static Future<List<CustomerModel>> getCustomers() async {
     try {
-      final response = await _client.from('customers').select('*').order('name', ascending: true);
-      return (response as List).map((json) => CustomerModel.fromJson(json)).toList();
+      final response = await _client
+          .from('customers')
+          .select('*')
+          .order('name', ascending: true);
+      return (response as List)
+          .map((json) => CustomerModel.fromJson(json))
+          .toList();
     } catch (e) {
       debugPrint('Error fetching customers: $e');
       return [];
@@ -93,19 +105,32 @@ class ApiRepository {
       final customers = await getCustomers();
       if (customers.isEmpty) return [];
 
-      final billsRes = await _client.from('bills').select('customer_id, grand_total');
-      final paymentsRes = await _client.from('payments').select('customer_id, amount');
+      final billsRes = await _client
+          .from('bills')
+          .select('customer_id, grand_total');
+      final paymentsRes = await _client
+          .from('payments')
+          .select('customer_id, amount');
 
       final billsList = (billsRes as List? ?? []);
       final paymentsList = (paymentsRes as List? ?? []);
 
       return customers.map((cust) {
         final custBills = billsList.where((b) => b['customer_id'] == cust.id);
-        final custPayments = paymentsList.where((p) => p['customer_id'] == cust.id);
+        final custPayments = paymentsList.where(
+          (p) => p['customer_id'] == cust.id,
+        );
 
-        final totalBilled = custBills.fold<double>(0.0, (sum, b) => sum + ((b['grand_total'] as num?)?.toDouble() ?? 0.0));
-        final totalPaid = custPayments.fold<double>(0.0, (sum, p) => sum + ((p['amount'] as num?)?.toDouble() ?? 0.0));
-        final balanceDue = (totalBilled - totalPaid - cust.advanceBalance).clamp(0.0, double.infinity);
+        final totalBilled = custBills.fold<double>(
+          0.0,
+          (sum, b) => sum + ((b['grand_total'] as num?)?.toDouble() ?? 0.0),
+        );
+        final totalPaid = custPayments.fold<double>(
+          0.0,
+          (sum, p) => sum + ((p['amount'] as num?)?.toDouble() ?? 0.0),
+        );
+        final balanceDue = (totalBilled - totalPaid - cust.advanceBalance)
+            .clamp(0.0, double.infinity);
 
         return cust.copyWith(
           totalBilled: totalBilled,
@@ -127,14 +152,18 @@ class ApiRepository {
   }) async {
     try {
       final customerCode = await getNextSequence('CUSTOMER');
-      final response = await _client.from('customers').insert({
-        'customer_code': customerCode,
-        'name': name,
-        'mobile': mobile,
-        'email': email,
-        'advance_balance': initialAdvance,
-        'loyalty_points': 0.0,
-      }).select().single();
+      final response = await _client
+          .from('customers')
+          .insert({
+            'customer_code': customerCode,
+            'name': name,
+            'mobile': mobile,
+            'email': email,
+            'advance_balance': initialAdvance,
+            'loyalty_points': 0.0,
+          })
+          .select()
+          .single();
 
       await logAudit(
         action: 'CREATE_CUSTOMER',
@@ -155,11 +184,10 @@ class ApiRepository {
     String? email,
   }) async {
     try {
-      await _client.from('customers').update({
-        'name': name,
-        'mobile': mobile,
-        'email': email,
-      }).eq('id', id);
+      await _client
+          .from('customers')
+          .update({'name': name, 'mobile': mobile, 'email': email})
+          .eq('id', id);
 
       await logAudit(action: 'UPDATE_CUSTOMER', entity: 'Customer $name');
       return true;
@@ -172,8 +200,13 @@ class ApiRepository {
   // --- PRODUCTS ---
   static Future<List<ProductModel>> getProducts() async {
     try {
-      final response = await _client.from('products').select('*').order('name', ascending: true);
-      return (response as List).map((json) => ProductModel.fromJson(json)).toList();
+      final response = await _client
+          .from('products')
+          .select('*')
+          .order('name', ascending: true);
+      return (response as List)
+          .map((json) => ProductModel.fromJson(json))
+          .toList();
     } catch (e) {
       debugPrint('Error fetching products: $e');
       return [];
@@ -188,12 +221,16 @@ class ApiRepository {
   }) async {
     try {
       final code = productCode ?? await getNextSequence('PRODUCT');
-      final response = await _client.from('products').insert({
-        'product_code': code,
-        'name': name,
-        'category': category,
-        'price': price,
-      }).select().single();
+      final response = await _client
+          .from('products')
+          .insert({
+            'product_code': code,
+            'name': name,
+            'category': category,
+            'price': price,
+          })
+          .select()
+          .single();
 
       await logAudit(
         action: 'CREATE_PRODUCT',
@@ -221,8 +258,13 @@ class ApiRepository {
   // --- EXPENSES ---
   static Future<List<ExpenseModel>> getExpenses() async {
     try {
-      final response = await _client.from('expenses').select('*').order('created_at', ascending: false);
-      return (response as List).map((json) => ExpenseModel.fromJson(json)).toList();
+      final response = await _client
+          .from('expenses')
+          .select('*')
+          .order('created_at', ascending: false);
+      return (response as List)
+          .map((json) => ExpenseModel.fromJson(json))
+          .toList();
     } catch (e) {
       debugPrint('Error fetching expenses: $e');
       return [];
@@ -238,14 +280,18 @@ class ApiRepository {
   }) async {
     try {
       final expenseNum = await getNextSequence('EXPENSE');
-      final response = await _client.from('expenses').insert({
-        'expense_number': expenseNum,
-        'title': title,
-        'amount': amount,
-        'category': category,
-        'payment_mode': paymentMode,
-        'notes': notes,
-      }).select().single();
+      final response = await _client
+          .from('expenses')
+          .insert({
+            'expense_number': expenseNum,
+            'title': title,
+            'amount': amount,
+            'category': category,
+            'payment_mode': paymentMode,
+            'notes': notes,
+          })
+          .select()
+          .single();
 
       await logAudit(
         action: 'CREATE_EXPENSE',
@@ -273,15 +319,25 @@ class ApiRepository {
   // --- AUDIT LOGS ---
   static Future<List<AuditLogModel>> getAuditLogs() async {
     try {
-      final response = await _client.from('audit_logs').select('*').order('created_at', ascending: false).limit(100);
-      return (response as List).map((json) => AuditLogModel.fromJson(json)).toList();
+      final response = await _client
+          .from('audit_logs')
+          .select('*')
+          .order('created_at', ascending: false)
+          .limit(100);
+      return (response as List)
+          .map((json) => AuditLogModel.fromJson(json))
+          .toList();
     } catch (e) {
       debugPrint('Error fetching audit logs: $e');
       return [];
     }
   }
 
-  static Future<void> logAudit({required String action, required String entity, String? newValue}) async {
+  static Future<void> logAudit({
+    required String action,
+    required String entity,
+    String? newValue,
+  }) async {
     try {
       final user = _client.auth.currentUser;
       final auditNumber = await getNextSequence('AUDIT');
@@ -300,20 +356,93 @@ class ApiRepository {
   // --- DYNAMIC LOYALTY RULES ENGINE ---
   static Future<List<LoyaltyRule>> getLoyaltyRules() async {
     final defaultRules = [
-      LoyaltyRule(id: 'r-1', ruleName: '1', minBillAmount: 1, maxBillAmount: 20, pointsEarned: 1, sortOrder: 1),
-      LoyaltyRule(id: 'r-2', ruleName: '2', minBillAmount: 21, maxBillAmount: 30, pointsEarned: 2, sortOrder: 2),
-      LoyaltyRule(id: 'r-3', ruleName: '3', minBillAmount: 31, maxBillAmount: 40, pointsEarned: 3, sortOrder: 3),
-      LoyaltyRule(id: 'r-4', ruleName: '4', minBillAmount: 41, maxBillAmount: 60, pointsEarned: 4, sortOrder: 4),
-      LoyaltyRule(id: 'r-5', ruleName: '5', minBillAmount: 61, maxBillAmount: 80, pointsEarned: 5, sortOrder: 5),
-      LoyaltyRule(id: 'r-6', ruleName: '6', minBillAmount: 81, maxBillAmount: 99, pointsEarned: 6, sortOrder: 6),
-      LoyaltyRule(id: 'r-7', ruleName: '7', minBillAmount: 100, maxBillAmount: 200, pointsEarned: 7, sortOrder: 7),
-      LoyaltyRule(id: 'r-8', ruleName: '8', minBillAmount: 201, maxBillAmount: 300, pointsEarned: 8, sortOrder: 8),
-      LoyaltyRule(id: 'r-9', ruleName: '9', minBillAmount: 301, maxBillAmount: 375, pointsEarned: 9, sortOrder: 9),
-      LoyaltyRule(id: 'r-10', ruleName: '10', minBillAmount: 376, maxBillAmount: 500, pointsEarned: 10, sortOrder: 10),
+      LoyaltyRule(
+        id: 'r-1',
+        ruleName: '1',
+        minBillAmount: 1,
+        maxBillAmount: 20,
+        pointsEarned: 1,
+        sortOrder: 1,
+      ),
+      LoyaltyRule(
+        id: 'r-2',
+        ruleName: '2',
+        minBillAmount: 21,
+        maxBillAmount: 30,
+        pointsEarned: 2,
+        sortOrder: 2,
+      ),
+      LoyaltyRule(
+        id: 'r-3',
+        ruleName: '3',
+        minBillAmount: 31,
+        maxBillAmount: 40,
+        pointsEarned: 3,
+        sortOrder: 3,
+      ),
+      LoyaltyRule(
+        id: 'r-4',
+        ruleName: '4',
+        minBillAmount: 41,
+        maxBillAmount: 60,
+        pointsEarned: 4,
+        sortOrder: 4,
+      ),
+      LoyaltyRule(
+        id: 'r-5',
+        ruleName: '5',
+        minBillAmount: 61,
+        maxBillAmount: 80,
+        pointsEarned: 5,
+        sortOrder: 5,
+      ),
+      LoyaltyRule(
+        id: 'r-6',
+        ruleName: '6',
+        minBillAmount: 81,
+        maxBillAmount: 99,
+        pointsEarned: 6,
+        sortOrder: 6,
+      ),
+      LoyaltyRule(
+        id: 'r-7',
+        ruleName: '7',
+        minBillAmount: 100,
+        maxBillAmount: 200,
+        pointsEarned: 7,
+        sortOrder: 7,
+      ),
+      LoyaltyRule(
+        id: 'r-8',
+        ruleName: '8',
+        minBillAmount: 201,
+        maxBillAmount: 300,
+        pointsEarned: 8,
+        sortOrder: 8,
+      ),
+      LoyaltyRule(
+        id: 'r-9',
+        ruleName: '9',
+        minBillAmount: 301,
+        maxBillAmount: 375,
+        pointsEarned: 9,
+        sortOrder: 9,
+      ),
+      LoyaltyRule(
+        id: 'r-10',
+        ruleName: '10',
+        minBillAmount: 376,
+        maxBillAmount: 500,
+        pointsEarned: 10,
+        sortOrder: 10,
+      ),
     ];
 
     try {
-      final response = await _client.from('loyalty_rules').select('*').order('sort_order', ascending: true);
+      final response = await _client
+          .from('loyalty_rules')
+          .select('*')
+          .order('sort_order', ascending: true);
       if ((response as List).isEmpty) return defaultRules;
       return response.map((json) => LoyaltyRule.fromJson(json)).toList();
     } catch (e) {
@@ -324,7 +453,8 @@ class ApiRepository {
 
   static Future<double> calculateLoyaltyPointsEarned(double billAmount) async {
     final rules = await getLoyaltyRules();
-    final active = rules.where((r) => r.enabled).toList()..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final active = rules.where((r) => r.enabled).toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
 
     for (final rule in active) {
       final max = rule.maxBillAmount ?? double.infinity;
@@ -337,16 +467,41 @@ class ApiRepository {
 
   static Future<List<LoyaltyRedemptionRule>> getLoyaltyRedemptionRules() async {
     final defaultRedemption = [
-      LoyaltyRedemptionRule(id: 'red-1', pointsRequired: 10, discountAmount: 4.0, enabled: true),
-      LoyaltyRedemptionRule(id: 'red-2', pointsRequired: 20, discountAmount: 5.0, enabled: true),
-      LoyaltyRedemptionRule(id: 'red-3', pointsRequired: 30, discountAmount: 8.0, enabled: true),
-      LoyaltyRedemptionRule(id: 'red-4', pointsRequired: 40, discountAmount: 10.0, enabled: true),
+      LoyaltyRedemptionRule(
+        id: 'red-1',
+        pointsRequired: 10,
+        discountAmount: 4.0,
+        enabled: true,
+      ),
+      LoyaltyRedemptionRule(
+        id: 'red-2',
+        pointsRequired: 20,
+        discountAmount: 5.0,
+        enabled: true,
+      ),
+      LoyaltyRedemptionRule(
+        id: 'red-3',
+        pointsRequired: 30,
+        discountAmount: 8.0,
+        enabled: true,
+      ),
+      LoyaltyRedemptionRule(
+        id: 'red-4',
+        pointsRequired: 40,
+        discountAmount: 10.0,
+        enabled: true,
+      ),
     ];
 
     try {
-      final response = await _client.from('loyalty_redemption_rules').select('*').order('points_required', ascending: true);
+      final response = await _client
+          .from('loyalty_redemption_rules')
+          .select('*')
+          .order('points_required', ascending: true);
       if ((response as List).isEmpty) return defaultRedemption;
-      return response.map((json) => LoyaltyRedemptionRule.fromJson(json)).toList();
+      return response
+          .map((json) => LoyaltyRedemptionRule.fromJson(json))
+          .toList();
     } catch (e) {
       debugPrint('Error fetching loyalty redemption rules: $e');
       return defaultRedemption;
@@ -375,14 +530,22 @@ class ApiRepository {
         }
       }
 
-      if (totalDiscount > 0) return double.parse(totalDiscount.toStringAsFixed(2));
+      if (totalDiscount > 0) {
+        return double.parse(totalDiscount.toStringAsFixed(2));
+      }
       final bestRule = enabledRules.first;
-      final rate = bestRule.pointsRequired > 0 ? (bestRule.discountAmount / bestRule.pointsRequired) : 0.5;
+      final rate = bestRule.pointsRequired > 0
+          ? (bestRule.discountAmount / bestRule.pointsRequired)
+          : 0.5;
       return double.parse((pointsToRedeem * rate).toStringAsFixed(2));
     }
 
-    final req = loyaltySettings.pointsRequired > 0 ? loyaltySettings.pointsRequired : 10.0;
-    final disc = loyaltySettings.discountValue > 0 ? loyaltySettings.discountValue : 5.0;
+    final req = loyaltySettings.pointsRequired > 0
+        ? loyaltySettings.pointsRequired
+        : 10.0;
+    final disc = loyaltySettings.discountValue > 0
+        ? loyaltySettings.discountValue
+        : 5.0;
     final ratePerPoint = disc / req;
     return double.parse((pointsToRedeem * ratePerPoint).toStringAsFixed(2));
   }
@@ -392,8 +555,8 @@ class ApiRepository {
     await _client.from('customers').insert(payload);
     await logAudit(
       action: 'SYNC_CREATE_CUSTOMER',
-      entity: 'Customer ' + (payload['name'] ?? ''),
-      newValue: 'Advance: ' + (payload['advance_balance']?.toString() ?? '0.0'),
+      entity: 'Customer ${payload['name'] ?? ''}',
+      newValue: 'Advance: ${payload['advance_balance']?.toString() ?? '0.0'}',
     );
   }
 
@@ -401,8 +564,8 @@ class ApiRepository {
     await _client.from('products').insert(payload);
     await logAudit(
       action: 'SYNC_CREATE_PRODUCT',
-      entity: 'Product ' + (payload['name'] ?? ''),
-      newValue: 'Price: ' + (payload['price']?.toString() ?? '0.0'),
+      entity: 'Product ${payload['name'] ?? ''}',
+      newValue: 'Price: ${payload['price']?.toString() ?? '0.0'}',
     );
   }
 
@@ -411,15 +574,21 @@ class ApiRepository {
     await logAudit(
       action: 'SYNC_CREATE_EXPENSE',
       entity: payload['title'] ?? 'Expense',
-      newValue: 'Amount: ' + (payload['amount']?.toString() ?? '0.0'),
+      newValue: 'Amount: ${payload['amount']?.toString() ?? '0.0'}',
     );
   }
 
   static Future<String> syncBillPayload(Map<String, dynamic> payload) async {
     final billData = Map<String, dynamic>.from(payload['billData']);
-    final itemsPayload = List<Map<String, dynamic>>.from(payload['itemsPayload']);
+    final itemsPayload = List<Map<String, dynamic>>.from(
+      payload['itemsPayload'],
+    );
 
-    final billRes = await _client.from('bills').insert(billData).select().single();
+    final billRes = await _client
+        .from('bills')
+        .insert(billData)
+        .select()
+        .single();
     final newBillId = billRes['id'] as String;
 
     if (itemsPayload.isNotEmpty) {
@@ -436,7 +605,9 @@ class ApiRepository {
     try {
       final billsData = await _client
           .from('bills')
-          .select('*, customer:customers(name, mobile, email), items:bill_items(*)')
+          .select(
+            '*, customer:customers(name, mobile, email), items:bill_items(*)',
+          )
           .order('created_at', ascending: false);
 
       return (billsData as List).map((json) {
@@ -496,13 +667,17 @@ class ApiRepository {
         'loyalty_points_redeemed': loyaltyPointsRedeemed,
       };
 
-      final itemsPayload = items.map((item) => {
-        'product_id': item.productId,
-        'product_name': item.productName,
-        'quantity': item.quantity,
-        'price': item.price,
-        'total': item.total,
-      }).toList();
+      final itemsPayload = items
+          .map(
+            (item) => {
+              'product_id': item.productId,
+              'product_name': item.productName,
+              'quantity': item.quantity,
+              'price': item.price,
+              'total': item.total,
+            },
+          )
+          .toList();
 
       final createdBillId = await syncBillPayload({
         'billData': billData,
@@ -536,17 +711,31 @@ class ApiRepository {
 
       // Customer Advance / Loyalty Updates
       if (customerId != null) {
-        final customerRes = await _client.from('customers').select('advance_balance, loyalty_points').eq('id', customerId).single();
-        final currentAdvance = (customerRes['advance_balance'] as num?)?.toDouble() ?? 0.0;
-        final currentLoyalty = (customerRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
+        final customerRes = await _client
+            .from('customers')
+            .select('advance_balance, loyalty_points')
+            .eq('id', customerId)
+            .single();
+        final currentAdvance =
+            (customerRes['advance_balance'] as num?)?.toDouble() ?? 0.0;
+        final currentLoyalty =
+            (customerRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
 
-        final newAdvance = (currentAdvance - advanceUsed + advanceEarned).clamp(0.0, double.infinity);
-        final newLoyalty = (currentLoyalty - loyaltyPointsRedeemed + loyaltyPointsEarned).clamp(0.0, double.infinity);
+        final newAdvance = (currentAdvance - advanceUsed + advanceEarned).clamp(
+          0.0,
+          double.infinity,
+        );
+        final newLoyalty =
+            (currentLoyalty - loyaltyPointsRedeemed + loyaltyPointsEarned)
+                .clamp(0.0, double.infinity);
 
-        await _client.from('customers').update({
-          'advance_balance': newAdvance,
-          'loyalty_points': newLoyalty,
-        }).eq('id', customerId);
+        await _client
+            .from('customers')
+            .update({
+              'advance_balance': newAdvance,
+              'loyalty_points': newLoyalty,
+            })
+            .eq('id', customerId);
       }
 
       await logAudit(
@@ -586,7 +775,11 @@ class ApiRepository {
   // --- SETTINGS ---
   static Future<AllSettings> getSettings() async {
     final defaultSettings = AllSettings(
-      shop: ShopSettings(shopName: 'ABC Printing Center', phone: '+91 98765 43210', address: 'Main Road, Shop No. 12'),
+      shop: ShopSettings(
+        shopName: 'ABC Printing Center',
+        phone: '+91 98765 43210',
+        address: 'Main Road, Shop No. 12',
+      ),
       billing: BillingSettings(),
       loyalty: LoyaltySettings(),
     );
@@ -627,7 +820,10 @@ class ApiRepository {
         {'key': 'billing', 'value': settings.billing.toJson()},
         {'key': 'loyalty', 'value': settings.loyalty.toJson()},
       ]);
-      await logAudit(action: 'UPDATE_SETTINGS', entity: 'System & Shop Settings');
+      await logAudit(
+        action: 'UPDATE_SETTINGS',
+        entity: 'System & Shop Settings',
+      );
       return true;
     } catch (e) {
       debugPrint('Error saving settings: $e');
@@ -666,8 +862,13 @@ class ApiRepository {
         pendingBalances += c.advanceBalance;
       }
 
-      final totalExpenses = expenses.fold<double>(0.0, (sum, e) => sum + e.amount);
-      final averageBillValue = bills.isNotEmpty ? (totalIncome / bills.length) : 0.0;
+      final totalExpenses = expenses.fold<double>(
+        0.0,
+        (sum, e) => sum + e.amount,
+      );
+      final averageBillValue = bills.isNotEmpty
+          ? (totalIncome / bills.length)
+          : 0.0;
 
       return DashboardStatsModel(
         todaysSales: todaySales,
@@ -693,27 +894,132 @@ class ApiRepository {
       final existingProds = await getProducts();
       if (existingProds.isEmpty) {
         final seedProducts = [
-          {'name': 'A4 B&W Single', 'category': 'Xerox & Print', 'price': 2.00, 'product_code': 'PRD-000001'},
-          {'name': 'A4 B&W Both Sides', 'category': 'Xerox & Print', 'price': 3.00, 'product_code': 'PRD-000002'},
-          {'name': 'A4 Color Print Single', 'category': 'Xerox & Print', 'price': 10.00, 'product_code': 'PRD-000003'},
-          {'name': 'A4 Color Both Sides', 'category': 'Xerox & Print', 'price': 18.00, 'product_code': 'PRD-000004'},
-          {'name': 'Legal B&W Print', 'category': 'Xerox & Print', 'price': 3.00, 'product_code': 'PRD-000005'},
-          {'name': 'A3 B&W Print', 'category': 'Xerox & Print', 'price': 5.00, 'product_code': 'PRD-000006'},
-          {'name': 'A3 Color Print', 'category': 'Xerox & Print', 'price': 25.00, 'product_code': 'PRD-000007'},
-          {'name': 'Glossy Photo Print 4x6', 'category': 'Xerox & Print', 'price': 15.00, 'product_code': 'PRD-000008'},
-          {'name': 'Glossy Photo Print A4', 'category': 'Xerox & Print', 'price': 40.00, 'product_code': 'PRD-000009'},
-          {'name': 'PVC ID Card Print', 'category': 'Xerox & Print', 'price': 50.00, 'product_code': 'PRD-000010'},
-          {'name': 'A4 Document Lamination', 'category': 'Lamination & Binding', 'price': 30.00, 'product_code': 'PRD-000011'},
-          {'name': 'A3 Certificate Lamination', 'category': 'Lamination & Binding', 'price': 50.00, 'product_code': 'PRD-000012'},
-          {'name': 'ID Card Lamination (Pouch)', 'category': 'Lamination & Binding', 'price': 15.00, 'product_code': 'PRD-000013'},
-          {'name': 'Spiral Binding (Up to 100 pgs)', 'category': 'Lamination & Binding', 'price': 40.00, 'product_code': 'PRD-000014'},
-          {'name': 'Spiral Binding (Over 100 pgs)', 'category': 'Lamination & Binding', 'price': 60.00, 'product_code': 'PRD-000015'},
-          {'name': 'Hard Cover Project Binding', 'category': 'Lamination & Binding', 'price': 200.00, 'product_code': 'PRD-000016'},
-          {'name': 'Ballpoint Pen (Blue/Black)', 'category': 'Stationery', 'price': 10.00, 'product_code': 'PRD-000017'},
-          {'name': 'Gel Pen 0.5mm', 'category': 'Stationery', 'price': 20.00, 'product_code': 'PRD-000018'},
-          {'name': 'A4 75GSM Copier Paper Ream', 'category': 'Paper & Envelopes', 'price': 280.00, 'product_code': 'PRD-000019'},
-          {'name': 'Long Ruled Notebook 180 Pgs', 'category': 'Stationery', 'price': 60.00, 'product_code': 'PRD-000020'},
-          {'name': 'A4 Clear Display Folder (20 Pockets)', 'category': 'Stationery', 'price': 80.00, 'product_code': 'PRD-000021'}
+          {
+            'name': 'A4 B&W Single',
+            'category': 'Xerox & Print',
+            'price': 2.00,
+            'product_code': 'PRD-000001',
+          },
+          {
+            'name': 'A4 B&W Both Sides',
+            'category': 'Xerox & Print',
+            'price': 3.00,
+            'product_code': 'PRD-000002',
+          },
+          {
+            'name': 'A4 Color Print Single',
+            'category': 'Xerox & Print',
+            'price': 10.00,
+            'product_code': 'PRD-000003',
+          },
+          {
+            'name': 'A4 Color Both Sides',
+            'category': 'Xerox & Print',
+            'price': 18.00,
+            'product_code': 'PRD-000004',
+          },
+          {
+            'name': 'Legal B&W Print',
+            'category': 'Xerox & Print',
+            'price': 3.00,
+            'product_code': 'PRD-000005',
+          },
+          {
+            'name': 'A3 B&W Print',
+            'category': 'Xerox & Print',
+            'price': 5.00,
+            'product_code': 'PRD-000006',
+          },
+          {
+            'name': 'A3 Color Print',
+            'category': 'Xerox & Print',
+            'price': 25.00,
+            'product_code': 'PRD-000007',
+          },
+          {
+            'name': 'Glossy Photo Print 4x6',
+            'category': 'Xerox & Print',
+            'price': 15.00,
+            'product_code': 'PRD-000008',
+          },
+          {
+            'name': 'Glossy Photo Print A4',
+            'category': 'Xerox & Print',
+            'price': 40.00,
+            'product_code': 'PRD-000009',
+          },
+          {
+            'name': 'PVC ID Card Print',
+            'category': 'Xerox & Print',
+            'price': 50.00,
+            'product_code': 'PRD-000010',
+          },
+          {
+            'name': 'A4 Document Lamination',
+            'category': 'Lamination & Binding',
+            'price': 30.00,
+            'product_code': 'PRD-000011',
+          },
+          {
+            'name': 'A3 Certificate Lamination',
+            'category': 'Lamination & Binding',
+            'price': 50.00,
+            'product_code': 'PRD-000012',
+          },
+          {
+            'name': 'ID Card Lamination (Pouch)',
+            'category': 'Lamination & Binding',
+            'price': 15.00,
+            'product_code': 'PRD-000013',
+          },
+          {
+            'name': 'Spiral Binding (Up to 100 pgs)',
+            'category': 'Lamination & Binding',
+            'price': 40.00,
+            'product_code': 'PRD-000014',
+          },
+          {
+            'name': 'Spiral Binding (Over 100 pgs)',
+            'category': 'Lamination & Binding',
+            'price': 60.00,
+            'product_code': 'PRD-000015',
+          },
+          {
+            'name': 'Hard Cover Project Binding',
+            'category': 'Lamination & Binding',
+            'price': 200.00,
+            'product_code': 'PRD-000016',
+          },
+          {
+            'name': 'Ballpoint Pen (Blue/Black)',
+            'category': 'Stationery',
+            'price': 10.00,
+            'product_code': 'PRD-000017',
+          },
+          {
+            'name': 'Gel Pen 0.5mm',
+            'category': 'Stationery',
+            'price': 20.00,
+            'product_code': 'PRD-000018',
+          },
+          {
+            'name': 'A4 75GSM Copier Paper Ream',
+            'category': 'Paper & Envelopes',
+            'price': 280.00,
+            'product_code': 'PRD-000019',
+          },
+          {
+            'name': 'Long Ruled Notebook 180 Pgs',
+            'category': 'Stationery',
+            'price': 60.00,
+            'product_code': 'PRD-000020',
+          },
+          {
+            'name': 'A4 Clear Display Folder (20 Pockets)',
+            'category': 'Stationery',
+            'price': 80.00,
+            'product_code': 'PRD-000021',
+          },
         ];
         await _client.from('products').insert(seedProducts);
       }
@@ -721,15 +1027,35 @@ class ApiRepository {
       final existingCusts = await getCustomers();
       if (existingCusts.isEmpty) {
         final seedCustomers = [
-          {'name': 'Rajesh Sharma (College Staff)', 'mobile': '9876543210', 'email': 'rajesh.sharma@campus.edu', 'advance_balance': 200.00, 'loyalty_points': 45.0, 'customer_code': 'CUS-000001'},
-          {'name': 'Priya Patel (Architecture Student)', 'mobile': '9876543211', 'email': 'priya.patel@student.edu', 'advance_balance': 50.00, 'loyalty_points': 20.0, 'customer_code': 'CUS-000002'},
-          {'name': 'Apex Coaching Center (Monthly Account)', 'mobile': '9876543212', 'email': 'admin@apexcoaching.org', 'advance_balance': 0.00, 'loyalty_points': 110.0, 'customer_code': 'CUS-000003'}
+          {
+            'name': 'Rajesh Sharma (College Staff)',
+            'mobile': '9876543210',
+            'email': 'rajesh.sharma@campus.edu',
+            'advance_balance': 200.00,
+            'loyalty_points': 45.0,
+            'customer_code': 'CUS-000001',
+          },
+          {
+            'name': 'Priya Patel (Architecture Student)',
+            'mobile': '9876543211',
+            'email': 'priya.patel@student.edu',
+            'advance_balance': 50.00,
+            'loyalty_points': 20.0,
+            'customer_code': 'CUS-000002',
+          },
+          {
+            'name': 'Apex Coaching Center (Monthly Account)',
+            'mobile': '9876543212',
+            'email': 'admin@apexcoaching.org',
+            'advance_balance': 0.00,
+            'loyalty_points': 110.0,
+            'customer_code': 'CUS-000003',
+          },
         ];
         await _client.from('customers').insert(seedCustomers);
       }
     } catch (e) {
-      debugPrint('Error seeding default catalog: ' + e.toString());
+      debugPrint('Error seeding default catalog: $e');
     }
   }
-
 }

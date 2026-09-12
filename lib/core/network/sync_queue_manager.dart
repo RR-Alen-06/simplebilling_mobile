@@ -1,4 +1,5 @@
 ﻿import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -10,13 +11,14 @@ class SyncQueueManager {
   SyncQueueManager._();
   static final SyncQueueManager instance = SyncQueueManager._();
 
-  final ValueNotifier<List<SyncTask>> tasksNotifier = ValueNotifier<List<SyncTask>>([]);
+  final ValueNotifier<List<SyncTask>> tasksNotifier =
+      ValueNotifier<List<SyncTask>>([]);
   bool _isProcessing = false;
   static const _uuid = Uuid();
 
   String get _currentQueueKey {
     final uid = SupabaseConfig.client.auth.currentUser?.id ?? 'guest';
-    return 'printpro_sync_queue_' + uid;
+    return 'printpro_sync_queue_$uid';
   }
 
   Future<void> initialize() async {
@@ -36,22 +38,26 @@ class SyncQueueManager {
         tasksNotifier.value = [];
       }
     } catch (e) {
-      debugPrint('Error loading sync queue: ' + e.toString());
+      debugPrint('Error loading sync queue: $e');
     }
   }
 
   Future<void> _persistQueue() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final data = jsonEncode(tasksNotifier.value.map((e) => e.toJson()).toList());
+      final data = jsonEncode(
+        tasksNotifier.value.map((e) => e.toJson()).toList(),
+      );
       await prefs.setString(_currentQueueKey, data);
     } catch (e) {
-      debugPrint('Error persisting sync queue: ' + e.toString());
+      debugPrint('Error persisting sync queue: $e');
     }
   }
 
   /// Automatically prune synced tasks older than 24 hours to prevent unbounded local storage growth
-  Future<void> pruneOldSyncedTasks({Duration maxAge = const Duration(hours: 24)}) async {
+  Future<void> pruneOldSyncedTasks({
+    Duration maxAge = const Duration(hours: 24),
+  }) async {
     final now = DateTime.now();
     final current = tasksNotifier.value;
 
@@ -64,7 +70,9 @@ class SyncQueueManager {
     }).toList();
 
     if (retained.length != current.length) {
-      debugPrint('Pruned ' + (current.length - retained.length).toString() + ' old synced tasks from local queue.');
+      debugPrint(
+        'Pruned ${current.length - retained.length} old synced tasks from local queue.',
+      );
       tasksNotifier.value = retained;
       await _persistQueue();
     }
@@ -79,12 +87,17 @@ class SyncQueueManager {
     return SyncStatus.synced;
   }
 
-  Future<SyncTask> enqueueTask(String action, Map<String, dynamic> payload, {String? clientRef}) async {
+  Future<SyncTask> enqueueTask(
+    String action,
+    Map<String, dynamic> payload, {
+    String? clientRef,
+  }) async {
     final ref = clientRef ?? payload['client_ref'] as String? ?? _uuid.v4();
-    final enrichedPayload = Map<String, dynamic>.from(payload)..['client_ref'] = ref;
+    final enrichedPayload = Map<String, dynamic>.from(payload)
+      ..['client_ref'] = ref;
 
     final task = SyncTask(
-      id: 'task_' + DateTime.now().millisecondsSinceEpoch.toString(),
+      id: 'task_${DateTime.now().millisecondsSinceEpoch}',
       action: action,
       clientRef: ref,
       payload: enrichedPayload,
@@ -104,7 +117,10 @@ class SyncQueueManager {
     final index = current.indexWhere((t) => t.id == taskId);
     if (index != -1) {
       final updated = List<SyncTask>.from(current);
-      updated[index] = updated[index].copyWith(status: SyncStatus.pending, clearError: true);
+      updated[index] = updated[index].copyWith(
+        status: SyncStatus.pending,
+        clearError: true,
+      );
       tasksNotifier.value = updated;
       await _persistQueue();
       processQueue();
@@ -112,7 +128,9 @@ class SyncQueueManager {
   }
 
   Future<void> removeTask(String taskId) async {
-    tasksNotifier.value = tasksNotifier.value.where((t) => t.id != taskId).toList();
+    tasksNotifier.value = tasksNotifier.value
+        .where((t) => t.id != taskId)
+        .toList();
     await _persistQueue();
   }
 
@@ -124,7 +142,8 @@ class SyncQueueManager {
       final tasks = List<SyncTask>.from(tasksNotifier.value);
       for (int i = 0; i < tasks.length; i++) {
         final task = tasks[i];
-        if (task.status == SyncStatus.pending || task.status == SyncStatus.failed) {
+        if (task.status == SyncStatus.pending ||
+            task.status == SyncStatus.failed) {
           tasks[i] = task.copyWith(status: SyncStatus.syncing);
           tasksNotifier.value = List.from(tasks);
           await _persistQueue();
@@ -144,15 +163,21 @@ class SyncQueueManager {
                 await ApiRepository.syncExpensePayload(task.payload);
                 break;
               default:
-                debugPrint('Unknown sync task action: ' + task.action);
+                debugPrint('Unknown sync task action: ${task.action}');
             }
 
-            tasks[i] = task.copyWith(status: SyncStatus.synced, clearError: true);
+            tasks[i] = task.copyWith(
+              status: SyncStatus.synced,
+              clearError: true,
+            );
             tasksNotifier.value = List.from(tasks);
             await _persistQueue();
           } catch (err) {
-            debugPrint('Failed to sync task: ' + err.toString());
-            tasks[i] = task.copyWith(status: SyncStatus.failed, errorMessage: err.toString());
+            debugPrint('Failed to sync task: $err');
+            tasks[i] = task.copyWith(
+              status: SyncStatus.failed,
+              errorMessage: err.toString(),
+            );
             tasksNotifier.value = List.from(tasks);
             await _persistQueue();
           }

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/app_colors.dart';
@@ -30,6 +30,7 @@ class SimpleBillingApp extends ConsumerStatefulWidget {
 
 class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
   User? _currentUser;
+  bool _isGuestMode = false;
 
   @override
   void initState() {
@@ -90,9 +91,15 @@ class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
         scaffoldBackgroundColor: AppColors.background,
         fontFamily: 'Roboto',
       ),
-      home: _currentUser != null
-          ? MainShellScreen(onSignOut: () => setState(() => _currentUser = null))
-          : LoginScreen(onLoginSuccess: () => setState(() => _currentUser = SupabaseConfig.client.auth.currentUser)),
+      home: (_currentUser != null || _isGuestMode)
+          ? MainShellScreen(onSignOut: () => setState(() {
+              _currentUser = null;
+              _isGuestMode = false;
+            }))
+          : LoginScreen(
+              onLoginSuccess: () => setState(() => _currentUser = SupabaseConfig.client.auth.currentUser),
+              onGuestLogin: () => setState(() => _isGuestMode = true),
+            ),
     );
   }
 }

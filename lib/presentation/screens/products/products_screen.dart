@@ -9,7 +9,14 @@ import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/sync_status_badge.dart';
 import 'package:simplebilling_mobile/providers/billing_provider.dart';
 
-final categoriesList = ['All', 'Stationery', 'Xerox & Print', 'Lamination & Binding', 'Paper & Envelopes', 'Other Services'];
+final categoriesList = [
+  'All',
+  'Stationery',
+  'Xerox & Print',
+  'Lamination & Binding',
+  'Paper & Envelopes',
+  'Other Services',
+];
 
 class ProductsScreen extends ConsumerStatefulWidget {
   const ProductsScreen({super.key});
@@ -29,10 +36,16 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
     super.dispose();
   }
 
-  SyncStatus _getProductSyncStatus(String? clientRef, String id, List<SyncTask> tasks) {
+  SyncStatus _getProductSyncStatus(
+    String? clientRef,
+    String id,
+    List<SyncTask> tasks,
+  ) {
     for (final task in tasks) {
       if (task.action == 'create_product') {
-        if ((clientRef != null && task.clientRef == clientRef) || task.id == id || task.clientRef == id) {
+        if ((clientRef != null && task.clientRef == clientRef) ||
+            task.id == id ||
+            task.clientRef == id) {
           return task.status;
         }
       }
@@ -49,8 +62,10 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        builder: (modalCtx, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: const Row(
             children: [
               Icon(Icons.add_shopping_cart, color: AppColors.primary),
@@ -64,13 +79,24 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
               children: [
                 TextField(
                   controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Product / Item Name *', border: OutlineInputBorder(), isDense: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Product / Item Name *',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  value: category,
-                  decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder(), isDense: true),
-                  items: categoriesList.where((c) => c != 'All').map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  initialValue: category,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: categoriesList
+                      .where((c) => c != 'All')
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
                   onChanged: (val) {
                     if (val != null) setModalState(() => category = val);
                   },
@@ -79,12 +105,20 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                 TextField(
                   controller: priceCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Selling Rate (Rs.) *', border: OutlineInputBorder(), isDense: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Selling Rate (Rs.) *',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: codeCtrl,
-                  decoration: const InputDecoration(labelText: 'Barcode / SKU (Optional)', border: OutlineInputBorder(), isDense: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Barcode / SKU (Optional)',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
                 ),
               ],
             ),
@@ -95,14 +129,24 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
               onPressed: () async {
                 final name = nameCtrl.text.trim();
                 final price = double.tryParse(priceCtrl.text) ?? 0.0;
-                final code = codeCtrl.text.trim().isEmpty ? null : codeCtrl.text.trim();
+                final code = codeCtrl.text.trim().isEmpty
+                    ? null
+                    : codeCtrl.text.trim();
                 if (name.isEmpty || price < 0) return;
 
-                final created = await ApiRepository.createProduct(name, category, price, productCode: code);
+                final created = await ApiRepository.createProduct(
+                  name,
+                  category,
+                  price,
+                  productCode: code,
+                );
                 if (created == null) {
                   // Offline fallback
                   final clientRef = const Uuid().v4();
@@ -113,19 +157,20 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                       'name': name,
                       'category': category,
                       'price': price,
-                      if (code != null) 'product_code': code,
+                      'product_code': ?code,
                     },
                     clientRef: clientRef,
                   );
                 }
 
-                if (mounted) {
-                  ref.invalidate(productsProvider);
-                  if (ctx.mounted) Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Product "$name" saved!')),
-                  );
+                if (!mounted) return;
+                ref.invalidate(productsProvider);
+                if (ctx.mounted) {
+                  Navigator.of(ctx).pop();
                 }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Product "$name" saved!')),
+                );
               },
               child: const Text('Save Product'),
             ),
@@ -142,7 +187,10 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Products & Catalog', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text(
+          'Products & Catalog',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
@@ -179,8 +227,14 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                     : null,
                 filled: true,
                 fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                  horizontal: 16,
+                ),
               ),
               onChanged: (v) => setState(() => _searchTerm = v),
             ),
@@ -196,11 +250,15 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                   child: FilterChip(
                     label: Text(cat),
                     selected: isSelected,
-                    selectedColor: AppColors.primary.withOpacity(0.15),
+                    selectedColor: AppColors.primary.withValues(alpha: 0.15),
                     checkmarkColor: AppColors.primary,
                     labelStyle: TextStyle(
-                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.textPrimary,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                       fontSize: 12,
                     ),
                     onSelected: (val) {
@@ -217,12 +275,17 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
               valueListenable: SyncQueueManager.instance.tasksNotifier,
               builder: (ctx, tasks, _) {
                 return productsAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
                   error: (err, _) => Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                        const Icon(
+                          Icons.error_outline,
+                          size: 48,
+                          color: AppColors.error,
+                        ),
                         const SizedBox(height: 8),
                         Text('Error loading products: $err'),
                         const SizedBox(height: 12),
@@ -235,12 +298,16 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                   ),
                   data: (products) {
                     final filtered = products.where((p) {
-                      final matchesCat = _selectedCategory == 'All' || p.category.toLowerCase() == _selectedCategory.toLowerCase();
+                      final matchesCat =
+                          _selectedCategory == 'All' ||
+                          p.category.toLowerCase() ==
+                              _selectedCategory.toLowerCase();
                       if (!matchesCat) return false;
                       if (_searchTerm.isEmpty) return true;
                       final q = _searchTerm.toLowerCase();
                       return p.name.toLowerCase().contains(q) ||
-                          (p.productCode != null && p.productCode!.toLowerCase().contains(q)) ||
+                          (p.productCode != null &&
+                              p.productCode!.toLowerCase().contains(q)) ||
                           p.category.toLowerCase().contains(q);
                     }).toList();
 
@@ -249,11 +316,19 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.inventory_2_outlined, size: 48, color: AppColors.textSecondary),
+                            const Icon(
+                              Icons.inventory_2_outlined,
+                              size: 48,
+                              color: AppColors.textSecondary,
+                            ),
                             const SizedBox(height: 8),
                             Text(
-                              _searchTerm.isEmpty ? 'No products in catalog' : 'No products matching "$_searchTerm"',
-                              style: const TextStyle(color: AppColors.textSecondary),
+                              _searchTerm.isEmpty
+                                  ? 'No products in catalog'
+                                  : 'No products matching "$_searchTerm"',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ],
                         ),
@@ -261,62 +336,118 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
                     }
 
                     return ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (ctx, i) {
                         final prod = filtered[i];
-                        final syncStatus = _getProductSyncStatus(prod.clientRef, prod.id, tasks);
+                        final syncStatus = _getProductSyncStatus(
+                          prod.clientRef,
+                          prod.id,
+                          tasks,
+                        );
 
                         return Card(
                           elevation: 0.5,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
                             title: Row(
                               children: [
-                                Text(prod.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                Text(
+                                  prod.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
                                 if (prod.productCode != null)
                                   Padding(
                                     padding: const EdgeInsets.only(left: 6),
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
-                                      child: Text(prod.productCode!, style: const TextStyle(fontSize: 10, color: Colors.black87)),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[200],
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        prod.productCode!,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
                                     ),
                                   ),
                               ],
                             ),
-                            subtitle: Text(prod.category, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                            subtitle: Text(
+                              prod.category,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
                                   Formatters.currency(prod.price),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.primary),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: AppColors.primary,
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
                                 SyncStatusBadge(status: syncStatus),
                                 IconButton(
-                                  icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.error),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 20,
+                                    color: AppColors.error,
+                                  ),
                                   onPressed: () async {
                                     final confirm = await showDialog<bool>(
                                       context: context,
                                       builder: (c) => AlertDialog(
                                         title: const Text('Delete Product'),
-                                        content: Text('Are you sure you want to remove "${prod.name}"?'),
+                                        content: Text(
+                                          'Are you sure you want to remove "${prod.name}"?',
+                                        ),
                                         actions: [
-                                          TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.of(c).pop(false),
+                                            child: const Text('Cancel'),
+                                          ),
                                           ElevatedButton(
-                                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
-                                            onPressed: () => Navigator.of(c).pop(true),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: AppColors.error,
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            onPressed: () =>
+                                                Navigator.of(c).pop(true),
                                             child: const Text('Delete'),
                                           ),
                                         ],
                                       ),
                                     );
                                     if (confirm == true) {
-                                      await ApiRepository.deleteProduct(prod.id);
+                                      await ApiRepository.deleteProduct(
+                                        prod.id,
+                                      );
                                       ref.invalidate(productsProvider);
                                     }
                                   },

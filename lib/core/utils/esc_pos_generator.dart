@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+
 import 'package:simplebilling_mobile/data/models/bill_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
@@ -27,11 +28,9 @@ class EscPosGenerator {
     int paperWidthCols = 42, // 42 cols for 80mm, 32 cols for 58mm
   }) {
     final List<int> bytes = [];
-    final curr = billing.currencySymbol.isNotEmpty ? billing.currencySymbol : 'Rs.';
-
-    void appendText(String text) {
-      bytes.addAll(utf8.encode(text));
-    }
+    final curr = billing.currencySymbol.isNotEmpty
+        ? billing.currencySymbol
+        : 'Rs.';
 
     void appendLine(String text) {
       bytes.addAll(utf8.encode(text));
@@ -63,15 +62,26 @@ class EscPosGenerator {
     bytes.addAll(normalSize);
     bytes.addAll(boldOff);
 
-    if (shop.address.isNotEmpty) appendLine(shop.address);
-    if (shop.phone.isNotEmpty) appendLine('Ph: ' + shop.phone);
-    if (shop.gstNumber.isNotEmpty) appendLine('GSTIN: ' + shop.gstNumber);
+    if (shop.address.isNotEmpty) {
+      appendLine(shop.address);
+    }
+    if (shop.phone.isNotEmpty) {
+      appendLine('Ph: ${shop.phone}');
+    }
+    if (shop.gstNumber.isNotEmpty) {
+      appendLine('GSTIN: ${shop.gstNumber}');
+    }
 
     bytes.addAll(alignLeft);
     appendDivider('=');
-    appendRow('Inv: ' + bill.billNumber, Formatters.parseAndFormatDate(bill.createdAt));
+    appendRow(
+      'Inv: ${bill.billNumber}',
+      Formatters.parseAndFormatDate(bill.createdAt),
+    );
     if (bill.customerName != null && bill.customerName!.isNotEmpty) {
-      appendLine('Cust: ' + bill.customerName! + (bill.customerMobile != null ? ' (' + bill.customerMobile! + ')' : ''));
+      appendLine(
+        'Cust: ${bill.customerName!}${bill.customerMobile != null ? ' (${bill.customerMobile!})' : ''}',
+      );
     }
     appendDivider('-');
 
@@ -85,31 +95,46 @@ class EscPosGenerator {
       final qtyStr = it.quantity.toStringAsFixed(0);
       final rateStr = it.price.toStringAsFixed(2);
       final totalStr = it.total.toStringAsFixed(2);
-      appendRow('  ' + qtyStr + ' x ' + rateStr, curr + ' ' + totalStr);
+      appendRow('  $qtyStr x $rateStr', '$curr $totalStr');
     }
 
     appendDivider('-');
-    appendRow('Subtotal:', curr + ' ' + bill.total.toStringAsFixed(2));
+    appendRow('Subtotal:', '$curr ${bill.total.toStringAsFixed(2)}');
     if (bill.discount > 0) {
-      appendRow('Discount:', '- ' + curr + ' ' + bill.discount.toStringAsFixed(2));
+      appendRow('Discount:', '- $curr ${bill.discount.toStringAsFixed(2)}');
     }
     if (bill.gstAmount > 0) {
-      appendRow('GST Tax:', '+ ' + curr + ' ' + bill.gstAmount.toStringAsFixed(2));
+      appendRow('GST Tax:', '+ $curr ${bill.gstAmount.toStringAsFixed(2)}');
     }
     if (bill.roundingAdjustment != 0) {
-      appendRow('Rounding:', (bill.roundingAdjustment > 0 ? '+' : '') + curr + ' ' + bill.roundingAdjustment.toStringAsFixed(2));
+      appendRow(
+        'Rounding:',
+        '${bill.roundingAdjustment > 0 ? '+' : ''}$curr ${bill.roundingAdjustment.toStringAsFixed(2)}',
+      );
     }
 
     appendDivider('=');
     bytes.addAll(boldOn);
-    appendRow('GRAND TOTAL:', curr + ' ' + bill.grandTotal.toStringAsFixed(2));
+    appendRow('GRAND TOTAL:', '$curr ${bill.grandTotal.toStringAsFixed(2)}');
     bytes.addAll(boldOff);
     appendDivider('=');
 
-    appendLine('Paid via: ' + bill.paymentMethod + ' (' + curr + ' ' + bill.paidTotal.toStringAsFixed(2) + ')');
-    if (bill.advanceUsed > 0) appendLine('Advance Used: ' + curr + ' ' + bill.advanceUsed.toStringAsFixed(2));
-    if (bill.advanceEarned > 0) appendLine('Advance Credited: ' + curr + ' ' + bill.advanceEarned.toStringAsFixed(2));
-    if (bill.loyaltyPointsEarned > 0) appendLine('Loyalty Points Earned: +' + bill.loyaltyPointsEarned.toStringAsFixed(0) + ' pts');
+    appendLine(
+      'Paid via: ${bill.paymentMethod} ($curr ${bill.paidTotal.toStringAsFixed(2)})',
+    );
+    if (bill.advanceUsed > 0) {
+      appendLine('Advance Used: $curr ${bill.advanceUsed.toStringAsFixed(2)}');
+    }
+    if (bill.advanceEarned > 0) {
+      appendLine(
+        'Advance Credited: $curr ${bill.advanceEarned.toStringAsFixed(2)}',
+      );
+    }
+    if (bill.loyaltyPointsEarned > 0) {
+      appendLine(
+        'Loyalty Points Earned: +${bill.loyaltyPointsEarned.toStringAsFixed(0)} pts',
+      );
+    }
 
     bytes.addAll(alignCenter);
     bytes.addAll(lineFeed);

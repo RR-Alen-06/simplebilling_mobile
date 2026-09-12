@@ -42,7 +42,8 @@ class BarcodeScannerModal extends StatefulWidget {
   State<BarcodeScannerModal> createState() => _BarcodeScannerModalState();
 }
 
-class _BarcodeScannerModalState extends State<BarcodeScannerModal> with SingleTickerProviderStateMixin {
+class _BarcodeScannerModalState extends State<BarcodeScannerModal>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _codeCtrl = TextEditingController();
   final MobileScannerController _cameraController = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
@@ -71,16 +72,17 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal> with SingleTi
 
     // 1. Search products by product_code, name, or id
     final matchedProduct = widget.products.cast<ProductModel?>().firstWhere(
-          (p) =>
-              (p?.productCode?.toLowerCase() == query) ||
-              (p?.name.toLowerCase() == query) ||
-              (p?.id.toLowerCase() == query),
-          orElse: () => null,
-        );
+      (p) =>
+          (p?.productCode?.toLowerCase() == query) ||
+          (p?.name.toLowerCase() == query) ||
+          (p?.id.toLowerCase() == query),
+      orElse: () => null,
+    );
 
     if (matchedProduct != null && widget.onProductScanned != null) {
       setState(() {
-        _feedbackMessage = 'Found Product: ${matchedProduct.name} (Rs. ${matchedProduct.price})';
+        _feedbackMessage =
+            'Found Product: ${matchedProduct.name} (Rs. ${matchedProduct.price})';
         _isSuccess = true;
       });
       widget.onProductScanned!(matchedProduct);
@@ -92,16 +94,17 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal> with SingleTi
 
     // 2. Search customers by customer_code, mobile, or name
     final matchedCustomer = widget.customers.cast<CustomerModel?>().firstWhere(
-          (c) =>
-              (c?.customerCode?.toLowerCase() == query) ||
-              (c?.mobile?.toLowerCase() == query) ||
-              (c?.name.toLowerCase() == query),
-          orElse: () => null,
-        );
+      (c) =>
+          (c?.customerCode?.toLowerCase() == query) ||
+          (c?.mobile?.toLowerCase() == query) ||
+          (c?.name.toLowerCase() == query),
+      orElse: () => null,
+    );
 
     if (matchedCustomer != null && widget.onCustomerScanned != null) {
       setState(() {
-        _feedbackMessage = 'Found Customer: ${matchedCustomer.name} (${matchedCustomer.mobile ?? "-"})';
+        _feedbackMessage =
+            'Found Customer: ${matchedCustomer.name} (${matchedCustomer.mobile ?? "-"})';
         _isSuccess = true;
       });
       widget.onCustomerScanned!(matchedCustomer);
@@ -137,7 +140,10 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal> with SingleTi
           Container(
             width: 40,
             height: 4,
-            decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -145,19 +151,29 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal> with SingleTi
             children: [
               const Row(
                 children: [
-                  Icon(Icons.qr_code_scanner, color: AppColors.primary, size: 24),
+                  Icon(
+                    Icons.qr_code_scanner,
+                    color: AppColors.primary,
+                    size: 24,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     'Live Barcode & QR Scanner',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ],
               ),
               Row(
                 children: [
                   IconButton(
-                    icon: Icon(_isTorchOn ? Icons.flash_on : Icons.flash_off,
-                        color: _isTorchOn ? Colors.amber : Colors.grey),
+                    icon: Icon(
+                      _isTorchOn ? Icons.flash_on : Icons.flash_off,
+                      color: _isTorchOn ? Colors.amber : Colors.grey,
+                    ),
                     tooltip: 'Toggle Flashlight',
                     onPressed: () async {
                       await _cameraController.toggleTorch();
@@ -210,14 +226,21 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal> with SingleTi
                   Positioned(
                     bottom: 12,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.65),
+                        color: Colors.black.withValues(alpha: 0.65),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Text(
                         'Align barcode / QR within frame',
-                        style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
@@ -234,11 +257,21 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal> with SingleTi
                   controller: _codeCtrl,
                   decoration: InputDecoration(
                     hintText: 'Or enter barcode / SKU / mobile manually...',
-                    prefixIcon: const Icon(Icons.keyboard, color: AppColors.primary, size: 20),
+                    prefixIcon: const Icon(
+                      Icons.keyboard,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
                     filled: true,
                     fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                   ),
                   onSubmitted: _handleCodeSubmission,
                 ),
@@ -248,8 +281,13 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal> with SingleTi
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
                 onPressed: () => _handleCodeSubmission(_codeCtrl.text),
                 child: const Text('Lookup'),
@@ -261,13 +299,18 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal> with SingleTi
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: _isSuccess ? AppColors.success.withOpacity(0.1) : AppColors.error.withOpacity(0.1),
+                color: _isSuccess
+                    ? AppColors.success.withValues(alpha: 0.1)
+                    : AppColors.error.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
-                  Icon(_isSuccess ? Icons.check_circle : Icons.error_outline,
-                      color: _isSuccess ? AppColors.success : AppColors.error, size: 18),
+                  Icon(
+                    _isSuccess ? Icons.check_circle : Icons.error_outline,
+                    color: _isSuccess ? AppColors.success : AppColors.error,
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

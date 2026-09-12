@@ -4,15 +4,21 @@ import 'package:simplebilling_mobile/core/network/supabase_client.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
-  const LoginScreen({super.key, required this.onLoginSuccess});
+  final VoidCallback? onGuestLogin;
+
+  const LoginScreen({
+    super.key,
+    required this.onLoginSuccess,
+    this.onGuestLogin,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailCtrl = TextEditingController();
-  final TextEditingController _passwordCtrl = TextEditingController();
+  final TextEditingController _emailCtrl = TextEditingController(text: 'admin@simplebilling.com');
+  final TextEditingController _passwordCtrl = TextEditingController(text: '123456');
   bool _isLoading = false;
   String? _errorMsg;
 
@@ -56,7 +62,9 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
       } catch (_) {}
-      setState(() => _errorMsg = e.toString());
+      
+      // If offline or placeholder supabase credentials, notify or fallback to guest
+      setState(() => _errorMsg = 'Supabase: ${e.toString().replaceAll('Exception:', '')}');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -149,6 +157,23 @@ class _LoginScreenState extends State<LoginScreen> {
                             : const Text('Sign In to Account', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                       ),
                     ),
+                    if (widget.onGuestLogin != null) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          icon: const Icon(Icons.flash_on, size: 18),
+                          label: const Text('Explore in Demo / Guest Mode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          onPressed: widget.onGuestLogin,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
