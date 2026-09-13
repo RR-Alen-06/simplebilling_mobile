@@ -1,9 +1,10 @@
-﻿class ShopSettings {
+class ShopSettings {
   final String shopName;
   final String address;
   final String phone;
   final String email;
   final String gstNumber;
+  final String upiId;
   final String logoUrl;
   final String footerMessage;
 
@@ -13,6 +14,7 @@
     this.phone = '+91 98765 43210',
     this.email = 'contact@printproerp.com',
     this.gstNumber = '33AAAAA0000A1Z5',
+    this.upiId = 'store@okaxis',
     this.logoUrl = '',
     this.footerMessage = 'Thank you for your business! Visit again.',
   });
@@ -24,6 +26,7 @@
       phone: json['phone'] as String? ?? '+91 98765 43210',
       email: json['email'] as String? ?? 'contact@printproerp.com',
       gstNumber: json['gst_number'] as String? ?? '33AAAAA0000A1Z5',
+      upiId: json['upi_id'] as String? ?? 'store@okaxis',
       logoUrl: json['logo_url'] as String? ?? '',
       footerMessage: json['footer_message'] as String? ?? 'Thank you for your business! Visit again.',
     );
@@ -36,6 +39,7 @@
       'phone': phone,
       'email': email,
       'gst_number': gstNumber,
+      'upi_id': upiId,
       'logo_url': logoUrl,
       'footer_message': footerMessage,
     };
@@ -228,22 +232,81 @@ class SequenceConfigModel {
   }
 }
 
+class EmailSettings {
+  final bool enabled;
+  final String serviceId;
+  final String templateId;
+  final String publicKey;
+
+  EmailSettings({
+    this.enabled = false,
+    this.serviceId = '',
+    this.templateId = '',
+    this.publicKey = '',
+  });
+
+  factory EmailSettings.fromJson(Map<String, dynamic> json) {
+    return EmailSettings(
+      enabled: json['enabled'] as bool? ?? false,
+      serviceId: json['service_id'] as String? ?? '',
+      templateId: json['template_id'] as String? ?? '',
+      publicKey: json['public_key'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'enabled': enabled,
+      'service_id': serviceId,
+      'template_id': templateId,
+      'public_key': publicKey,
+    };
+  }
+}
+
+class SecuritySettings {
+  final String adminPin;
+
+  SecuritySettings({
+    this.adminPin = '1234',
+  });
+
+  factory SecuritySettings.fromJson(Map<String, dynamic> json) {
+    return SecuritySettings(
+      adminPin: json['admin_pin'] as String? ?? '1234',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'admin_pin': adminPin,
+    };
+  }
+}
+
 class AllSettings {
   final ShopSettings shop;
   final BillingSettings billing;
   final LoyaltySettings loyalty;
+  final EmailSettings email;
+  final SecuritySettings security;
 
   AllSettings({
     required this.shop,
     required this.billing,
     required this.loyalty,
-  });
+    EmailSettings? email,
+    SecuritySettings? security,
+  })  : email = email ?? EmailSettings(),
+        security = security ?? SecuritySettings();
 
   factory AllSettings.fromJson(Map<String, dynamic> json) {
     return AllSettings(
       shop: ShopSettings.fromJson(json['shop'] as Map<String, dynamic>? ?? {}),
       billing: BillingSettings.fromJson(json['billing'] as Map<String, dynamic>? ?? {}),
       loyalty: LoyaltySettings.fromJson(json['loyalty'] as Map<String, dynamic>? ?? {}),
+      email: EmailSettings.fromJson(json['email'] as Map<String, dynamic>? ?? {}),
+      security: SecuritySettings.fromJson(json['security'] as Map<String, dynamic>? ?? {}),
     );
   }
 
@@ -252,6 +315,8 @@ class AllSettings {
       'shop': shop.toJson(),
       'billing': billing.toJson(),
       'loyalty': loyalty.toJson(),
+      'email': email.toJson(),
+      'security': security.toJson(),
     };
   }
 }
