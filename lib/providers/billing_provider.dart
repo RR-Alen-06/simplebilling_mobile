@@ -1,7 +1,8 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/customer_model.dart';
 import '../data/models/product_model.dart';
 import '../data/models/bill_model.dart';
+import '../data/models/expense_model.dart';
 import '../data/models/settings_model.dart';
 import '../data/repositories/api_repository.dart';
 import '../core/utils/rounding_engine.dart';
@@ -20,6 +21,10 @@ final customerSummariesProvider = FutureProvider<List<CustomerModel>>((ref) asyn
 
 final productsProvider = FutureProvider<List<ProductModel>>((ref) async {
   return await ApiRepository.getProducts();
+});
+
+final expensesListProvider = FutureProvider<List<ExpenseModel>>((ref) async {
+  return await ApiRepository.getExpenses();
 });
 
 final loyaltyRulesProvider = FutureProvider<List<LoyaltyRedemptionRule>>((ref) async {
@@ -158,6 +163,20 @@ class CartNotifier extends StateNotifier<CartState> {
       quantity: quantity,
       price: it.price,
       total: double.parse((quantity * it.price).toStringAsFixed(2)),
+    );
+    state = state.copyWith(items: updatedList);
+  }
+
+  void updateItemPrice(int index, double newPrice) {
+    if (index < 0 || index >= state.items.length || newPrice < 0) return;
+    final updatedList = List<BillItemModel>.from(state.items);
+    final it = updatedList[index];
+    updatedList[index] = BillItemModel(
+      productId: it.productId,
+      productName: it.productName,
+      quantity: it.quantity,
+      price: newPrice,
+      total: double.parse((it.quantity * newPrice).toStringAsFixed(2)),
     );
     state = state.copyWith(items: updatedList);
   }
