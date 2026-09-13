@@ -1419,7 +1419,7 @@ class ApiRepository {
       final backup = {
         'version': '1.0.0',
         'exported_at': DateTime.now().toIso8601String(),
-        'settings': settings?.toJson(),
+        'settings': settings.toJson(),
         'sequences': sequences.map((s) => {'key': s.key, 'prefix': s.prefix, 'padding': s.padding, 'current_val': s.currentVal}).toList(),
         'products': products.map((p) => p.toJson()).toList(),
         'customers': customers.map((c) => c.toJson()).toList(),

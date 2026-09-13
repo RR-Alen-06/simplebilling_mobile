@@ -46,7 +46,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
   final TextEditingController _discountValueCtrl = TextEditingController(text: '5');
   List<LoyaltyRedemptionRule> _redemptionRules = [];
   List<LoyaltyRule> _earningRules = [];
-  bool _loadingLoyalty = false;
 
   // Tab 5: EmailJS & WhatsApp Integration
   bool _emailEnabled = false;

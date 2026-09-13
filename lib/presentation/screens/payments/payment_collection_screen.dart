@@ -548,7 +548,7 @@ class _PaymentCollectionScreenState extends ConsumerState<PaymentCollectionScree
                             children: [
                               Row(
                                 children: [
-                                  Text(num, style: const TextStyle(fontWeight: FontWeight.w800, fontFamily: 'monospace', fontSize: 11.5, color: AppColors.deepLavender)),
+                                  Text(payNum, style: const TextStyle(fontWeight: FontWeight.w800, fontFamily: 'monospace', fontSize: 11.5, color: AppColors.deepLavender)),
                                   const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),

@@ -6,8 +6,6 @@ import 'package:simplebilling_mobile/core/constants/app_colors.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
 import 'package:simplebilling_mobile/core/utils/csv_exporter.dart';
 import 'package:simplebilling_mobile/data/models/bill_model.dart';
-import 'package:simplebilling_mobile/data/models/customer_model.dart';
-import 'package:simplebilling_mobile/data/models/expense_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/invoice_modal.dart';
