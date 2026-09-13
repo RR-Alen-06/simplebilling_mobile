@@ -107,7 +107,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
   Future<void> _fetchAuxiliarySettings() async {
     setState(() {
       _loadingSequences = true;
-      _loadingLoyalty = true;
     });
 
     try {
@@ -121,14 +120,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
           _redemptionRules = redRules;
           _earningRules = earnRules;
           _loadingSequences = false;
-          _loadingLoyalty = false;
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
           _loadingSequences = false;
-          _loadingLoyalty = false;
         });
       }
     }

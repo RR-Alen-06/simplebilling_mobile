@@ -89,54 +89,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         (parsed.isBefore(range.end) || parsed.isAtSameMomentAs(range.end));
   }
 
-  void _showAddCustomerDialog() {
-    final nameCtrl = TextEditingController();
-    final mobileCtrl = TextEditingController();
-    final emailCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Quick Add Customer', style: TextStyle(fontWeight: FontWeight.w800)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Customer Name *')),
-            const SizedBox(height: 10),
-            TextField(controller: mobileCtrl, decoration: const InputDecoration(labelText: 'Mobile Number')),
-            const SizedBox(height: 10),
-            TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email Address')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              final name = nameCtrl.text.trim();
-              if (name.isEmpty) return;
-              final mobile = mobileCtrl.text.trim().isEmpty ? null : mobileCtrl.text.trim();
-              final email = emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim();
-              await ApiRepository.createCustomer(name, mobile, email: email);
-              ref.invalidate(customersProvider);
-              ref.invalidate(customerSummariesProvider);
-              if (mounted) {
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Customer added! 🎉')));
-              }
-            },
-            child: const Text('Save Customer'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showAddExpenseDialog() {
     final titleCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
