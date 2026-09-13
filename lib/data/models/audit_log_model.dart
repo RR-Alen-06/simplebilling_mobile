@@ -1,5 +1,6 @@
 class AuditLogModel {
   final String id;
+  final String auditNumber;
   final String? userId;
   final String userName;
   final String action;
@@ -10,20 +11,28 @@ class AuditLogModel {
 
   AuditLogModel({
     required this.id,
+    String? auditNumber,
     this.userId,
-    this.userName = 'Admin',
+    this.userName = 'Super Admin',
     required this.action,
     required this.entity,
     this.previousValue,
     this.newValue,
     required this.createdAt,
-  });
+  }) : auditNumber = auditNumber ?? 'AUDIT-${id.length >= 6 ? id.substring(0, 6).toUpperCase() : id.toUpperCase()}';
 
   factory AuditLogModel.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id'] as String? ?? '000001';
+    final auditNum = json['audit_number'] as String? ??
+        (rawId.startsWith('AUDIT')
+            ? rawId
+            : 'AUDIT-${rawId.length >= 6 ? rawId.substring(0, 6).toUpperCase() : rawId.toUpperCase()}');
+
     return AuditLogModel(
-      id: json['id'] as String,
+      id: rawId,
+      auditNumber: auditNum,
       userId: json['user_id'] as String?,
-      userName: json['user_name'] as String? ?? 'Admin',
+      userName: json['user_name'] as String? ?? 'Super Admin',
       action: json['action'] as String? ?? 'ACTION',
       entity: json['entity'] as String? ?? 'Entity',
       previousValue: json['previous_value'] as String?,
@@ -35,6 +44,7 @@ class AuditLogModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'audit_number': auditNumber,
       if (userId != null) 'user_id': userId,
       'user_name': userName,
       'action': action,
