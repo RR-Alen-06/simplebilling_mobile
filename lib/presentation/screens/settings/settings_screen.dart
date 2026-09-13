@@ -507,7 +507,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: ['None', 'Normal', 'RoundUp', 'RoundDown'].contains(_roundingMethod) ? _roundingMethod : 'None',
+            initialValue: ['None', 'Normal', 'RoundUp', 'RoundDown'].contains(_roundingMethod) ? _roundingMethod : 'None',
             decoration: _inputDecoration('Default Rounding Method', Icons.calculate_outlined),
             items: const [
               DropdownMenuItem(value: 'None', child: Text('No Rounding (Exact Paise)')),
@@ -552,7 +552,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
             title: const Text('Enable GST Tax Calculation', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
             subtitle: Text(_gstEnabled ? 'Active default rate: ${_gstRateCtrl.text}%' : 'Disabled for billing terminal', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             value: _gstEnabled,
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
             onChanged: (val) => setState(() => _gstEnabled = val),
           ),
           if (_gstEnabled) ...[
@@ -650,7 +650,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                         const SizedBox(width: 10),
                         Expanded(
                           child: DropdownButtonFormField<int>(
-                            value: [4, 6, 8].contains(seq.padding) ? seq.padding : 6,
+                            initialValue: [4, 6, 8].contains(seq.padding) ? seq.padding : 6,
                             decoration: _inputDecoration('Padding', Icons.format_shapes_rounded),
                             items: const [
                               DropdownMenuItem(value: 4, child: Text('4 Digits (0001)')),
@@ -683,7 +683,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                           onPressed: () async {
                             final curSeq = _sequences.firstWhere((s) => s.key == key, orElse: () => seq);
                             await ApiRepository.saveSequenceConfig(curSeq);
-                            if (!context.mounted) return;
+                            if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('Sequence config for $key saved! 🔢')),
                             );
@@ -718,7 +718,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
               title: const Text('Enable Customer Loyalty Points', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
               subtitle: Text(_loyaltyEnabled ? 'Reward points accrual & redemption active' : 'Loyalty system disabled store-wide', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               value: _loyaltyEnabled,
-              activeColor: AppColors.deepMint,
+              activeThumbColor: AppColors.deepMint,
               onChanged: (val) => setState(() => _loyaltyEnabled = val),
             ),
             if (_loyaltyEnabled) ...[
@@ -755,7 +755,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                       ),
                       Switch(
                         value: r.enabled,
-                        activeColor: AppColors.deepMint,
+                        activeThumbColor: AppColors.deepMint,
                         onChanged: (val) {
                           setState(() {
                             _redemptionRules[idx] = LoyaltyRedemptionRule(
@@ -865,7 +865,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                       ),
                       Switch(
                         value: r.enabled,
-                        activeColor: AppColors.deepSky,
+                        activeThumbColor: AppColors.deepSky,
                         onChanged: (val) {
                           setState(() {
                             _earningRules[idx] = LoyaltyRule(
@@ -909,7 +909,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                 title: const Text('Enable Instant WhatsApp Receipt Sharing', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
                 subtitle: const Text('Allows sending receipt text & UPI payment links directly to customer WhatsApp', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 value: _whatsAppSharingEnabled,
-                activeColor: const Color(0xFF25D366),
+                activeThumbColor: const Color(0xFF25D366),
                 onChanged: (val) => setState(() => _whatsAppSharingEnabled = val),
               ),
               const Divider(height: 12),
@@ -918,7 +918,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                 title: const Text('Enable Telegram Receipt Sharing', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
                 subtitle: const Text('Enables Telegram dispatch shortcut on invoice modal', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 value: true,
-                activeColor: AppColors.deepSky,
+                activeThumbColor: AppColors.deepSky,
                 onChanged: (val) {},
               ),
               const Divider(height: 12),
@@ -927,7 +927,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                 title: const Text('Enable SMS / Text Receipt Prompt', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
                 subtitle: const Text('Enables native SMS receipt messaging fallback', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 value: true,
-                activeColor: AppColors.deepAmber,
+                activeThumbColor: AppColors.deepAmber,
                 onChanged: (val) {},
               ),
             ],
@@ -945,7 +945,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
                 title: const Text('Enable EmailJS Invoice Delivery', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
                 subtitle: Text(_emailEnabled ? 'Email dispatch active' : 'Email dispatch disabled', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                 value: _emailEnabled,
-                activeColor: AppColors.primary,
+                activeThumbColor: AppColors.primary,
                 onChanged: (val) => setState(() => _emailEnabled = val),
               ),
               if (_emailEnabled) ...[

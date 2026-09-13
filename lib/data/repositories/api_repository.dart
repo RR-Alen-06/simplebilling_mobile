@@ -1,3 +1,4 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simplebilling_mobile/core/network/supabase_client.dart';
@@ -12,8 +13,8 @@ import 'package:simplebilling_mobile/data/models/product_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 
 class ApiRepository {
-  static final _client = SupabaseConfig.client;
-  static get client => _client;
+  static final SupabaseClient _client = SupabaseConfig.client;
+  static SupabaseClient get client => _client;
 
   // --- ATOMIC SEQUENCE GENERATOR (ALIGNED WITH POSTGRES RPC & WEB APP) ---
   static Future<String> getNextSequence(String key) async {
@@ -509,7 +510,7 @@ class ApiRepository {
         'name': name,
         'category': category,
         'price': price,
-        if (productCode != null) 'product_code': productCode,
+        'product_code': ?productCode,
       }).eq('id', id);
 
       await logAudit(

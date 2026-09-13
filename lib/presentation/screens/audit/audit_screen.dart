@@ -358,7 +358,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                       decoration: BoxDecoration(
                         color: bgCol,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: textCol.withOpacity(0.5), width: 1),
+                        border: Border.all(color: textCol.withValues(alpha: 0.5), width: 1),
                       ),
                       child: Text(
                         log.action.toUpperCase(),

@@ -38,7 +38,7 @@ class _CustomerLedgerScreenState extends ConsumerState<CustomerLedgerScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
+        builder: (modalCtx, setModalState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           title: Row(
             children: [
@@ -164,6 +164,7 @@ class _CustomerLedgerScreenState extends ConsumerState<CustomerLedgerScreen> {
                         ref.invalidate(billsListProvider);
 
                         if (ctx.mounted) Navigator.of(ctx).pop();
+                        if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(

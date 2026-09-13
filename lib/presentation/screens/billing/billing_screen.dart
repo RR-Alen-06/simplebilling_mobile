@@ -168,12 +168,11 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
                 ref.invalidate(customerSummariesProvider);
                 ref.read(cartProvider.notifier).selectCustomer(newCust);
               }
-              if (mounted) {
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Customer ${nameCtrl.text.trim()} registered & selected! 🎉')),
-                );
-              }
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Customer ${nameCtrl.text.trim()} registered & selected! 🎉')),
+              );
             },
             child: const Text('Save & Select', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
@@ -588,7 +587,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) {
+        builder: (modalCtx, setModalState) {
           final advanceUsed = cart.useAdvance ? cart.advanceUsed : 0.0;
           final cashVal = double.tryParse(_cashCtrl.text) ?? 0.0;
           final upiVal = double.tryParse(_upiCtrl.text) ?? 0.0;

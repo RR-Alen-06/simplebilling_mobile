@@ -97,7 +97,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
+        builder: (modalCtx, setModalState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Quick Log Expense', style: TextStyle(fontWeight: FontWeight.w800)),
           content: Column(
@@ -138,10 +138,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 if (title.isEmpty || amt <= 0) return;
                 await ApiRepository.createExpense(title, amt, category);
                 ref.invalidate(expensesListProvider);
-                if (mounted) {
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Expense logged! 💸')));
-                }
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Expense logged! 💸')));
               },
               child: const Text('Save Expense'),
             ),
@@ -537,7 +536,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             label: const Text('Export Period CSV', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
             onPressed: () async {
               await CsvExporter.exportBills(filteredBills, filename: 'reconciled_sales_export.csv');
-              if (!context.mounted) return;
+              if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reconciled Period CSV exported! 📊')));
             },
           ),
