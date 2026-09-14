@@ -6,7 +6,7 @@ A native cross-platform Flutter mobile application (iOS, Android, macOS, Windows
 
 ---
 
-## ?? Environment Variables Setup
+## Environment Variables Setup
 
 Create a .env file at the root of the repository (or copy from .env.example):
 
@@ -22,7 +22,7 @@ flutter run --dart-define=SUPABASE_URL=https://your-project.supabase.co --dart-d
 
 ---
 
-## ?? How to Run
+## How to Run
 
 1. **Install dependencies**:
    `ash
@@ -41,7 +41,7 @@ flutter run --dart-define=SUPABASE_URL=https://your-project.supabase.co --dart-d
 
 ---
 
-## ?? Features & Modules Included
+## Features & Modules Included
 
 1. **Auth**: Supabase Auth session listener with user-scoped cache clearing on sign-out.
 2. **Dashboard**: Live metrics (Today''s sales, Monthly sales, Income vs Expense, Net profit, Customer dues).
