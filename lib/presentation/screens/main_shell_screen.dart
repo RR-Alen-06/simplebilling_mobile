@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
+import 'package:simplebilling_mobile/core/network/supabase_client.dart';
+import 'package:simplebilling_mobile/data/mock/mock_data_store.dart';
 import 'package:simplebilling_mobile/presentation/screens/dashboard/dashboard_screen.dart';
 import 'package:simplebilling_mobile/presentation/screens/billing/billing_screen.dart';
 import 'package:simplebilling_mobile/presentation/screens/bills/bills_list_screen.dart';
@@ -41,6 +43,70 @@ class _MainShellScreenState extends State<MainShellScreen> {
     ];
   }
 
+  Widget _buildSandboxBanner(BuildContext context) {
+    if (!SupabaseConfig.isMockMode) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFEF3C7),
+        border: Border(bottom: BorderSide(color: Color(0xFFFDE68A), width: 1)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.science_outlined, size: 18, color: Color(0xFFD97706)),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'TEST SANDBOX MODE • Live Web App DB Protected',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF92400E),
+                letterSpacing: 0.3,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: () async {
+              await MockDataStore.instance.resetToDefaults();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Sandbox demo data reset to clean initial state.'),
+                    backgroundColor: AppColors.primary,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                setState(() {});
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.refresh, size: 14, color: Color(0xFF92400E)),
+                  SizedBox(width: 4),
+                  Text(
+                    'Reset Data',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF92400E),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -49,51 +115,58 @@ class _MainShellScreenState extends State<MainShellScreen> {
 
         if (isLargeScreen) {
           return Scaffold(
-            body: Row(
+            body: Column(
               children: [
-                SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: IntrinsicHeight(
-                      child: NavigationRail(
-                        selectedIndex: _currentIndex,
-                        onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
-                        labelType: NavigationRailLabelType.all,
-                        indicatorColor: AppColors.pastelLavender,
-                        backgroundColor: Colors.white,
-                        selectedIconTheme: const IconThemeData(color: AppColors.deepLavender, size: 26),
-                        unselectedIconTheme: const IconThemeData(color: AppColors.textSecondary, size: 22),
-                        selectedLabelTextStyle: const TextStyle(
-                          color: AppColors.deepLavender,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
-                        ),
-                        unselectedLabelTextStyle: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
-                        ),
-                        destinations: const [
-                          NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: Text('Dashboard')),
-                          NavigationRailDestination(icon: Icon(Icons.point_of_sale_outlined), selectedIcon: Icon(Icons.point_of_sale), label: Text('Billing')),
-                          NavigationRailDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: Text('Bills')),
-                          NavigationRailDestination(icon: Icon(Icons.payments_outlined), selectedIcon: Icon(Icons.payments), label: Text('Payments')),
-                          NavigationRailDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: Text('Customers')),
-                          NavigationRailDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: Text('Products')),
-                          NavigationRailDestination(icon: Icon(Icons.money_off_outlined), selectedIcon: Icon(Icons.money_off), label: Text('Expenses')),
-                          NavigationRailDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: Text('Reports')),
-                          NavigationRailDestination(icon: Icon(Icons.security_outlined), selectedIcon: Icon(Icons.security), label: Text('Audit')),
-                          NavigationRailDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: Text('Settings')),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const VerticalDivider(thickness: 1, width: 1, color: AppColors.border),
+                _buildSandboxBanner(context),
                 Expanded(
-                  child: IndexedStack(
-                    index: _currentIndex,
-                    children: _screens,
+                  child: Row(
+                    children: [
+                      SingleChildScrollView(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          child: IntrinsicHeight(
+                            child: NavigationRail(
+                              selectedIndex: _currentIndex,
+                              onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+                              labelType: NavigationRailLabelType.all,
+                              indicatorColor: AppColors.pastelLavender,
+                              backgroundColor: Colors.white,
+                              selectedIconTheme: const IconThemeData(color: AppColors.deepLavender, size: 26),
+                              unselectedIconTheme: const IconThemeData(color: AppColors.textSecondary, size: 22),
+                              selectedLabelTextStyle: const TextStyle(
+                                color: AppColors.deepLavender,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                              unselectedLabelTextStyle: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11,
+                              ),
+                              destinations: const [
+                                NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: Text('Dashboard')),
+                                NavigationRailDestination(icon: Icon(Icons.point_of_sale_outlined), selectedIcon: Icon(Icons.point_of_sale), label: Text('Billing')),
+                                NavigationRailDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: Text('Bills')),
+                                NavigationRailDestination(icon: Icon(Icons.payments_outlined), selectedIcon: Icon(Icons.payments), label: Text('Payments')),
+                                NavigationRailDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: Text('Customers')),
+                                NavigationRailDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: Text('Products')),
+                                NavigationRailDestination(icon: Icon(Icons.money_off_outlined), selectedIcon: Icon(Icons.money_off), label: Text('Expenses')),
+                                NavigationRailDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: Text('Reports')),
+                                NavigationRailDestination(icon: Icon(Icons.security_outlined), selectedIcon: Icon(Icons.security), label: Text('Audit')),
+                                NavigationRailDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: Text('Settings')),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const VerticalDivider(thickness: 1, width: 1, color: AppColors.border),
+                      Expanded(
+                        child: IndexedStack(
+                          index: _currentIndex,
+                          children: _screens,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -103,9 +176,16 @@ class _MainShellScreenState extends State<MainShellScreen> {
 
         // Mobile Bottom Navigation Bar with crisp colorful theme
         return Scaffold(
-          body: IndexedStack(
-            index: _currentIndex,
-            children: _screens,
+          body: Column(
+            children: [
+              _buildSandboxBanner(context),
+              Expanded(
+                child: IndexedStack(
+                  index: _currentIndex,
+                  children: _screens,
+                ),
+              ),
+            ],
           ),
           bottomNavigationBar: Container(
             decoration: const BoxDecoration(

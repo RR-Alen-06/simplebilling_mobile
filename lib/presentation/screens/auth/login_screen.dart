@@ -18,8 +18,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailCtrl = TextEditingController(text: 'admin@shop.com');
-  final TextEditingController _passwordCtrl = TextEditingController(text: 'admin123');
+  final TextEditingController _emailCtrl = TextEditingController();
+  final TextEditingController _passwordCtrl = TextEditingController();
   bool _isLoading = false;
   String? _errorMsg;
 
@@ -42,6 +42,15 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
       _errorMsg = null;
     });
+
+    // If Mock / Sandbox mode is active, authenticate locally without network calls
+    if (SupabaseConfig.isMockMode) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('printpro_local_auth', 'sandbox_user_session');
+      if (mounted) setState(() => _isLoading = false);
+      widget.onLoginSuccess();
+      return;
+    }
 
     // 1. Check Built-in Master Admin Bypass
     if ((email == 'admin@shop.com' || email == 'admin@simplebilling.com') &&
