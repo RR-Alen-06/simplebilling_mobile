@@ -1,3 +1,4 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simplebilling_mobile/core/network/supabase_client.dart';
@@ -5,6 +6,7 @@ import 'package:simplebilling_mobile/core/utils/rounding_engine.dart';
 import 'package:simplebilling_mobile/data/models/audit_log_model.dart';
 import 'package:simplebilling_mobile/data/models/bill_model.dart';
 import 'package:simplebilling_mobile/data/models/customer_model.dart';
+import 'package:simplebilling_mobile/data/models/customer_ledger_model.dart';
 import 'package:simplebilling_mobile/data/models/dashboard_stats_model.dart';
 import 'package:simplebilling_mobile/data/models/expense_model.dart';
 import 'package:simplebilling_mobile/data/models/payment_model.dart';
@@ -12,7 +14,30 @@ import 'package:simplebilling_mobile/data/models/product_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 
 class ApiRepository {
-  static final _client = SupabaseConfig.client;
+  static final SupabaseClient _client = SupabaseConfig.client;
+  static SupabaseClient get client => _client;
+
+  // --- PAYMENTS ---
+  static Future<List<PaymentModel>> getPayments() async {
+    try {
+      final response = await _client
+          .from('payments')
+          .select('*, customers(name, mobile)')
+          .order('created_at', ascending: false);
+
+      return (response as List).map((json) {
+        final cust = json['customers'] as Map<String, dynamic>?;
+        return PaymentModel.fromJson({
+          ...json,
+          'customer_name': cust?['name'],
+          'customer_mobile': cust?['mobile'],
+        });
+      }).toList();
+    } catch (e) {
+      debugPrint('Error fetching payments: $e');
+      return [];
+    }
+  }
 
   // --- ATOMIC SEQUENCE GENERATOR (ALIGNED WITH POSTGRES RPC & WEB APP) ---
   static Future<String> getNextSequence(String key) async {
@@ -108,28 +133,34 @@ class ApiRepository {
 
       final billsRes = await _client
           .from('bills')
-          .select('customer_id, grand_total');
+          .select('customer_id, grand_total, paid_total');
       final paymentsRes = await _client
           .from('payments')
-          .select('customer_id, amount');
+          .select('customer_id, amount, bill_id');
 
       final billsList = (billsRes as List? ?? []);
       final paymentsList = (paymentsRes as List? ?? []);
 
       return customers.map((cust) {
         final custBills = billsList.where((b) => b['customer_id'] == cust.id);
-        final custPayments = paymentsList.where(
-          (p) => p['customer_id'] == cust.id,
+        final directPayments = paymentsList.where(
+          (p) => p['customer_id'] == cust.id && p['bill_id'] == null,
         );
 
         final totalBilled = custBills.fold<double>(
           0.0,
           (sum, b) => sum + ((b['grand_total'] as num?)?.toDouble() ?? 0.0),
         );
-        final totalPaid = custPayments.fold<double>(
+        final billPayments = custBills.fold<double>(
+          0.0,
+          (sum, b) => sum + ((b['paid_total'] as num?)?.toDouble() ?? 0.0),
+        );
+        final directPaymentsTotal = directPayments.fold<double>(
           0.0,
           (sum, p) => sum + ((p['amount'] as num?)?.toDouble() ?? 0.0),
         );
+
+        final totalPaid = billPayments + directPaymentsTotal;
         final balanceDue = (totalBilled - totalPaid - cust.advanceBalance)
             .clamp(0.0, double.infinity);
 
@@ -142,6 +173,240 @@ class ApiRepository {
     } catch (e) {
       debugPrint('Error calculating customer summaries: $e');
       return getCustomers();
+    }
+  }
+
+  static Future<CustomerModel?> getCustomer(String id) async {
+    try {
+      final res = await _client.from('customers').select('*').eq('id', id).maybeSingle();
+      if (res == null) return null;
+      final cust = CustomerModel.fromJson(res);
+
+      final billsRes = await _client.from('bills').select('grand_total, paid_total').eq('customer_id', id);
+      final paymentsRes = await _client.from('payments').select('amount, bill_id').eq('customer_id', id);
+
+      final billsList = (billsRes as List? ?? []);
+      final paymentsList = (paymentsRes as List? ?? []);
+
+      final totalBilled = billsList.fold<double>(
+        0.0,
+        (s, b) => s + ((b['grand_total'] as num?)?.toDouble() ?? 0.0),
+      );
+      final billPaid = billsList.fold<double>(
+        0.0,
+        (s, b) => s + ((b['paid_total'] as num?)?.toDouble() ?? 0.0),
+      );
+      final directPaid = paymentsList.where((p) => p['bill_id'] == null).fold<double>(
+        0.0,
+        (s, p) => s + ((p['amount'] as num?)?.toDouble() ?? 0.0),
+      );
+
+      final totalPaid = billPaid + directPaid;
+      final balanceDue = (totalBilled - totalPaid - cust.advanceBalance).clamp(0.0, double.infinity);
+
+      return cust.copyWith(
+        totalBilled: totalBilled,
+        totalPaid: totalPaid,
+        balanceDue: balanceDue,
+      );
+    } catch (e) {
+      debugPrint('Error getting customer: $e');
+      return null;
+    }
+  }
+
+  static Future<List<CustomerLedgerEntry>> getCustomerLedger(String customerId) async {
+    try {
+      final billsRes = await _client.from('bills').select('*').eq('customer_id', customerId).order('created_at', ascending: true);
+      final paymentsRes = await _client.from('payments').select('*').eq('customer_id', customerId).order('created_at', ascending: true);
+
+      final List<Map<String, dynamic>> rawEvents = [];
+
+      for (final b in (billsRes as List? ?? [])) {
+        rawEvents.add({
+          'id': b['id'] ?? '',
+          'date': b['created_at'] ?? DateTime.now().toIso8601String(),
+          'type': 'bill',
+          'reference_number': b['bill_number'] ?? 'BILL',
+          'description': 'Invoice billed (${b['payment_method'] ?? 'Standard'})',
+          'bill_amount': ((b['grand_total'] as num?)?.toDouble() ?? 0.0),
+          'paid_amount': ((b['paid_total'] as num?)?.toDouble() ?? 0.0),
+          'notes': b['notes'],
+        });
+      }
+
+      for (final p in (paymentsRes as List? ?? [])) {
+        final billId = p['bill_id'];
+        if (billId == null) {
+          rawEvents.add({
+            'id': p['id'] ?? '',
+            'date': p['created_at'] ?? DateTime.now().toIso8601String(),
+            'type': 'payment',
+            'reference_number': p['payment_number'] ?? 'PAYMENT',
+            'description': 'Direct Payment (${p['payment_method'] ?? 'Cash'})',
+            'bill_amount': 0.0,
+            'paid_amount': ((p['amount'] as num?)?.toDouble() ?? 0.0),
+            'notes': p['notes'],
+          });
+        }
+      }
+
+      rawEvents.sort((a, b) {
+        final d1 = DateTime.tryParse(a['date'] ?? '') ?? DateTime.now();
+        final d2 = DateTime.tryParse(b['date'] ?? '') ?? DateTime.now();
+        return d1.compareTo(d2);
+      });
+
+      double runningBalance = 0.0;
+      final List<CustomerLedgerEntry> entries = [];
+
+      for (final ev in rawEvents) {
+        final billAmt = ev['bill_amount'] as double;
+        final paidAmt = ev['paid_amount'] as double;
+
+        runningBalance += (billAmt - paidAmt);
+
+        LedgerBalanceType balType;
+        if (runningBalance > 0.01) {
+          balType = LedgerBalanceType.due;
+        } else if (runningBalance < -0.01) {
+          balType = LedgerBalanceType.adv;
+        } else {
+          balType = LedgerBalanceType.settled;
+        }
+
+        entries.add(CustomerLedgerEntry(
+          id: ev['id'],
+          date: ev['date'],
+          type: ev['type'] == 'payment' ? LedgerEntryType.payment : LedgerEntryType.bill,
+          referenceNumber: ev['reference_number'],
+          description: ev['description'],
+          billAmount: billAmt,
+          paidAmount: paidAmt,
+          runningBalance: runningBalance.abs(),
+          balanceType: balType,
+          notes: ev['notes'],
+        ));
+      }
+
+      return entries;
+    } catch (e) {
+      debugPrint('Error getting customer ledger: $e');
+      return [];
+    }
+  }
+
+  static Future<bool> recordCustomerPayment({
+    required String customerId,
+    required double amount,
+    required String paymentMode,
+    String? notes,
+  }) async {
+    try {
+      final paymentNumber = await getNextSequence('PAYMENT');
+
+      // 1. Insert into payments table
+      await _client.from('payments').insert({
+        'payment_number': paymentNumber,
+        'customer_id': customerId,
+        'amount': amount,
+        'payment_method': paymentMode,
+        'notes': notes ?? 'Credit settlement collection',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // 2. Fetch unpaid bills in chronological order
+      final unpaidBillsRes = await _client
+          .from('bills')
+          .select('id, grand_total, paid_total, loyalty_points_earned')
+          .eq('customer_id', customerId)
+          .order('created_at', ascending: true);
+
+      double remainingPayment = amount;
+      double unlockedLoyaltyPoints = 0.0;
+
+      for (final bill in (unpaidBillsRes as List? ?? [])) {
+        if (remainingPayment <= 0) break;
+
+        final grandTotal = (bill['grand_total'] as num?)?.toDouble() ?? 0.0;
+        final paidTotal = (bill['paid_total'] as num?)?.toDouble() ?? 0.0;
+        final pointsEarned = (bill['loyalty_points_earned'] as num?)?.toDouble() ?? 0.0;
+
+        if (paidTotal < grandTotal) {
+          final due = grandTotal - paidTotal;
+          final allocate = remainingPayment >= due ? due : remainingPayment;
+          final newPaidTotal = paidTotal + allocate;
+
+          await _client.from('bills').update({
+            'paid_total': newPaidTotal,
+          }).eq('id', bill['id']);
+
+          // If bill is cleared, unlock deferred loyalty points
+          if (newPaidTotal >= grandTotal && pointsEarned > 0) {
+            unlockedLoyaltyPoints += pointsEarned;
+          }
+
+          remainingPayment -= allocate;
+        }
+      }
+
+      // 3. Update customer advance balance (excess) & loyalty points
+      final custRes = await _client.from('customers').select('advance_balance, loyalty_points').eq('id', customerId).single();
+      final currentAdvance = (custRes['advance_balance'] as num?)?.toDouble() ?? 0.0;
+      final currentLoyalty = (custRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
+
+      final updatedAdvance = currentAdvance + remainingPayment;
+      final updatedLoyalty = currentLoyalty + unlockedLoyaltyPoints;
+
+      await _client.from('customers').update({
+        'advance_balance': updatedAdvance,
+        'loyalty_points': updatedLoyalty,
+      }).eq('id', customerId);
+
+      await logAudit(
+        action: 'RECORD_CUSTOMER_PAYMENT',
+        entity: 'Customer $customerId ($paymentNumber)',
+        newValue: 'Amount: ₹$amount ($paymentMode), Advance: ₹$updatedAdvance, Loyalty +$unlockedLoyaltyPoints',
+      );
+
+      return true;
+    } catch (e) {
+      debugPrint('Error recording customer payment: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> updateBillDiscount({
+    required String billId,
+    required double newDiscount,
+    required String reason,
+    required String adminPin,
+  }) async {
+    try {
+      final billRes = await _client.from('bills').select('*').eq('id', billId).single();
+      final total = (billRes['total'] as num?)?.toDouble() ?? 0.0;
+      final gstAmount = (billRes['gst_amount'] as num?)?.toDouble() ?? 0.0;
+      final grandTotal = (total - newDiscount + gstAmount).clamp(0.0, double.infinity);
+      final paidTotal = (billRes['paid_total'] as num?)?.toDouble() ?? 0.0;
+      final balanceDue = (grandTotal - paidTotal).clamp(0.0, double.infinity);
+
+      await _client.from('bills').update({
+        'discount': newDiscount,
+        'grand_total': grandTotal,
+        'balance_due': balanceDue,
+        'notes': 'Discount override: $reason',
+        'is_edited': true,
+      }).eq('id', billId);
+
+      await logAudit(
+        action: 'EDIT_BILL_DISCOUNT',
+        entity: 'Bill ${billRes['bill_number'] ?? billId}',
+        newValue: 'Discount: ₹$newDiscount, Total: ₹$grandTotal, Reason: $reason (PIN Verified)',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error updating bill discount: $e');
+      return false;
     }
   }
 
@@ -245,34 +510,6 @@ class ApiRepository {
     }
   }
 
-  static Future<bool> updateProduct(
-    String id, {
-    required String name,
-    required String category,
-    required double price,
-  }) async {
-    try {
-      await _client
-          .from('products')
-          .update({
-            'name': name,
-            'category': category,
-            'price': price,
-          })
-          .eq('id', id);
-
-      await logAudit(
-        action: 'UPDATE_PRODUCT',
-        entity: 'Product $name',
-        newValue: 'Category: $category, Price: $price',
-      );
-      return true;
-    } catch (e) {
-      debugPrint('Error updating product: $e');
-      return false;
-    }
-  }
-
   static Future<bool> deleteProduct(String id) async {
     try {
       await _client.from('products').delete().eq('id', id);
@@ -280,6 +517,33 @@ class ApiRepository {
       return true;
     } catch (e) {
       debugPrint('Error deleting product: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> updateProduct(
+    String id, {
+    required String name,
+    required String category,
+    required double price,
+    String? productCode,
+  }) async {
+    try {
+      await _client.from('products').update({
+        'name': name,
+        'category': category,
+        'price': price,
+        'product_code': ?productCode,
+      }).eq('id', id);
+
+      await logAudit(
+        action: 'UPDATE_PRODUCT',
+        entity: 'Product $name ($id)',
+        newValue: 'Category: $category, Price: $price',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error updating product: $e');
       return false;
     }
   }
@@ -342,275 +606,6 @@ class ApiRepository {
     } catch (e) {
       debugPrint('Error deleting expense: $e');
       return false;
-    }
-  }
-
-  static Future<bool> updateExpense(
-    String id, {
-    required String title,
-    required double amount,
-    required String category,
-    String paymentMode = 'Cash',
-    String? notes,
-  }) async {
-    try {
-      await _client
-          .from('expenses')
-          .update({
-            'title': title,
-            'amount': amount,
-            'category': category,
-            'payment_mode': paymentMode,
-            'notes': notes,
-          })
-          .eq('id', id);
-
-      await logAudit(
-        action: 'UPDATE_EXPENSE',
-        entity: title,
-        newValue: 'Amount: $amount ($paymentMode)',
-      );
-      return true;
-    } catch (e) {
-      debugPrint('Error updating expense: $e');
-      return false;
-    }
-  }
-
-  // --- PAYMENTS & TRANSACTIONS ---
-  static Future<List<PaymentModel>> getPayments() async {
-    try {
-      final response = await _client
-          .from('payments')
-          .select('*, customers(name, mobile)')
-          .order('created_at', ascending: false);
-
-      return (response as List).map((json) {
-        final cust = json['customers'] as Map<String, dynamic>?;
-        return PaymentModel.fromJson({
-          ...json,
-          'customer_name': cust?['name'],
-          'customer_mobile': cust?['mobile'],
-        });
-      }).toList();
-    } catch (e) {
-      debugPrint('Error fetching payments: $e');
-      return [];
-    }
-  }
-
-  static Future<PaymentModel?> recordCustomerPayment({
-    required String customerId,
-    required double amount,
-    required String paymentMethod,
-    String? billId,
-    String? notes,
-  }) async {
-    try {
-      final paymentNumber = await getNextSequence('PAYMENT');
-
-      final insertRes = await _client
-          .from('payments')
-          .insert({
-            'payment_number': paymentNumber,
-            'customer_id': customerId,
-            'bill_id': billId,
-            'amount': amount,
-            'payment_method': paymentMethod,
-            'notes': notes,
-          })
-          .select()
-          .single();
-
-      if (billId != null && billId.isNotEmpty) {
-        // Direct payment for a specific bill
-        final billRes = await _client
-            .from('bills')
-            .select('*')
-            .eq('id', billId)
-            .maybeSingle();
-
-        if (billRes != null) {
-          final currentPaid =
-              (billRes['paid_total'] as num?)?.toDouble() ?? 0.0;
-          final newPaidTotal = currentPaid + amount;
-          final updateData = <String, dynamic>{'paid_total': newPaidTotal};
-
-          if (paymentMethod == 'Cash') {
-            updateData['cash_paid'] =
-                ((billRes['cash_paid'] as num?)?.toDouble() ?? 0.0) + amount;
-          } else if (paymentMethod == 'UPI') {
-            updateData['upi_paid'] =
-                ((billRes['upi_paid'] as num?)?.toDouble() ?? 0.0) + amount;
-          }
-
-          await _client.from('bills').update(updateData).eq('id', billId);
-        }
-      } else {
-        // Customer-level payment: Apply FIFO to unpaid bills (oldest first)
-        final custBillsRes = await _client
-            .from('bills')
-            .select('*')
-            .eq('customer_id', customerId)
-            .order('created_at', ascending: true);
-
-        double unallocatedAmount = amount;
-        final custBills = (custBillsRes as List? ?? []);
-
-        for (final b in custBills) {
-          if (unallocatedAmount <= 0) break;
-
-          final grandTotal = (b['grand_total'] as num?)?.toDouble() ?? 0.0;
-          final paidTotal = (b['paid_total'] as num?)?.toDouble() ?? 0.0;
-          final remaining = (grandTotal - paidTotal).clamp(0.0, double.infinity);
-
-          if (remaining > 0) {
-            final allocation =
-                remaining < unallocatedAmount ? remaining : unallocatedAmount;
-            final newPaidTotal = paidTotal + allocation;
-            unallocatedAmount -= allocation;
-
-            final updateData = <String, dynamic>{'paid_total': newPaidTotal};
-            if (paymentMethod == 'Cash') {
-              updateData['cash_paid'] =
-                  ((b['cash_paid'] as num?)?.toDouble() ?? 0.0) + allocation;
-            } else if (paymentMethod == 'UPI') {
-              updateData['upi_paid'] =
-                  ((b['upi_paid'] as num?)?.toDouble() ?? 0.0) + allocation;
-            }
-
-            await _client.from('bills').update(updateData).eq('id', b['id']);
-          }
-        }
-
-        // If leftover payment remains after clearing bills, credit to customer's advance_balance
-        if (unallocatedAmount > 0) {
-          final custRes = await _client
-              .from('customers')
-              .select('advance_balance')
-              .eq('id', customerId)
-              .single();
-          final currentAdvance =
-              (custRes['advance_balance'] as num?)?.toDouble() ?? 0.0;
-          await _client
-              .from('customers')
-              .update({'advance_balance': currentAdvance + unallocatedAmount})
-              .eq('id', customerId);
-        }
-      }
-
-      await logAudit(
-        action: 'RECORD_PAYMENT',
-        entity: 'Payment $paymentNumber (₹$amount via $paymentMethod)',
-        newValue: notes,
-      );
-
-      return PaymentModel.fromJson(insertRes);
-    } catch (e) {
-      debugPrint('Error recording payment: $e');
-      return null;
-    }
-  }
-
-  // --- CUSTOMER LEDGER COMPUTATION ---
-  static Future<List<CustomerLedgerEntryModel>> getCustomerLedger(
-    String customerId,
-  ) async {
-    try {
-      final billsRes = await _client
-          .from('bills')
-          .select('*')
-          .eq('customer_id', customerId)
-          .order('created_at', ascending: true);
-
-      final paymentsRes = await _client
-          .from('payments')
-          .select('*')
-          .eq('customer_id', customerId)
-          .order('created_at', ascending: true);
-
-      final bills = (billsRes as List? ?? []);
-      final payments = (paymentsRes as List? ?? []);
-
-      final rawEvents = <Map<String, dynamic>>[];
-      final paymentBillIds = payments
-          .map((p) => p['bill_id'])
-          .where((id) => id != null)
-          .toSet();
-
-      for (final b in bills) {
-        final hasPaymentRecord = paymentBillIds.contains(b['id']);
-        final paidTotal = (b['paid_total'] as num?)?.toDouble() ?? 0.0;
-        final advanceUsed = (b['advance_used'] as num?)?.toDouble() ?? 0.0;
-        final directPaidForBill = hasPaymentRecord
-            ? 0.0
-            : (paidTotal - advanceUsed).clamp(0.0, double.infinity);
-        final effectivePaidOnBill = advanceUsed + directPaidForBill;
-
-        rawEvents.add({
-          'date': b['created_at'] ?? '',
-          'type': 'BILL',
-          'reference_no': b['bill_number'] ?? 'BILL',
-          'description': 'Bill generated (${b['payment_method'] ?? 'N/A'})',
-          'bill_amount': (b['grand_total'] as num?)?.toDouble() ?? 0.0,
-          'paid_amount': effectivePaidOnBill,
-          'advance_used': advanceUsed,
-          'loyalty_points':
-              (b['loyalty_points_earned'] as num?)?.toDouble() ?? 0.0,
-        });
-      }
-
-      for (final p in payments) {
-        rawEvents.add({
-          'date': p['created_at'] ?? '',
-          'type': 'PAYMENT',
-          'reference_no': p['payment_number'] ?? 'PAY',
-          'description':
-              p['notes'] ?? 'Payment received via ${p['payment_method'] ?? 'Cash'}',
-          'bill_amount': 0.0,
-          'paid_amount': (p['amount'] as num?)?.toDouble() ?? 0.0,
-          'advance_used': 0.0,
-          'loyalty_points': 0.0,
-        });
-      }
-
-      rawEvents.sort((a, b) {
-        final tA =
-            DateTime.tryParse(a['date'].toString())?.millisecondsSinceEpoch ?? 0;
-        final tB =
-            DateTime.tryParse(b['date'].toString())?.millisecondsSinceEpoch ?? 0;
-        return tA.compareTo(tB);
-      });
-
-      double runningBalance = 0.0;
-      final entries = <CustomerLedgerEntryModel>[];
-
-      for (int i = 0; i < rawEvents.length; i++) {
-        final evt = rawEvents[i];
-        final bAmt = evt['bill_amount'] as double;
-        final pAmt = evt['paid_amount'] as double;
-        runningBalance = runningBalance + bAmt - pAmt;
-
-        entries.add(
-          CustomerLedgerEntryModel(
-            id: 'ledger-$i',
-            date: evt['date'] as String,
-            type: evt['type'] as String,
-            referenceNo: evt['reference_no'] as String,
-            description: evt['description'] as String,
-            billAmount: bAmt,
-            paidAmount: pAmt,
-            advanceUsed: evt['advance_used'] as double,
-            loyaltyPoints: evt['loyalty_points'] as double,
-            runningBalance: runningBalance,
-          ),
-        );
-      }
-
-      return entries;
-    } catch (e) {
-      debugPrint('Error getting customer ledger: $e');
-      return [];
     }
   }
 
@@ -1354,6 +1349,151 @@ class ApiRepository {
       }
     } catch (e) {
       debugPrint('Error seeding default catalog: $e');
+    }
+  }
+
+  // --- SEQUENCE CONFIGURATIONS ---
+  static Future<List<SequenceConfigModel>> getSequenceConfigs() async {
+    final defaultConfigs = [
+      SequenceConfigModel(key: 'BILL', prefix: 'BILL', padding: 6, currentVal: 1),
+      SequenceConfigModel(key: 'PAYMENT', prefix: 'PAY', padding: 6, currentVal: 1),
+      SequenceConfigModel(key: 'EXPENSE', prefix: 'EXP', padding: 6, currentVal: 1),
+      SequenceConfigModel(key: 'PRODUCT', prefix: 'PRD', padding: 6, currentVal: 22),
+      SequenceConfigModel(key: 'CUSTOMER', prefix: 'CUS', padding: 6, currentVal: 4),
+      SequenceConfigModel(key: 'AUDIT', prefix: 'AUDIT', padding: 6, currentVal: 1),
+    ];
+
+    try {
+      final response = await _client.from('sequences').select('*');
+      if ((response as List).isEmpty) return defaultConfigs;
+      return response.map((json) => SequenceConfigModel.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error fetching sequence configs: $e');
+      return defaultConfigs;
+    }
+  }
+
+  static Future<bool> saveSequenceConfig(SequenceConfigModel config) async {
+    try {
+      await _client.from('sequences').upsert({
+        'key': config.key,
+        'prefix': config.prefix,
+        'padding': config.padding,
+      }, onConflict: 'key');
+
+      await logAudit(
+        action: 'UPDATE_SEQUENCE_CONFIG',
+        entity: 'Sequence ${config.key}',
+        newValue: 'Prefix: ${config.prefix}, Padding: ${config.padding}',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error saving sequence config: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> saveLoyaltyRules(List<LoyaltyRule> rules) async {
+    try {
+      for (final r in rules) {
+        await _client.from('loyalty_rules').upsert(r.toJson());
+      }
+      await logAudit(
+        action: 'UPDATE_LOYALTY_EARNING_RULES',
+        entity: 'Loyalty Earning Rules',
+        newValue: '${rules.length} tiers updated',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error saving loyalty rules: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> saveLoyaltyRedemptionRules(List<LoyaltyRedemptionRule> rules) async {
+    try {
+      for (final r in rules) {
+        await _client.from('loyalty_redemption_rules').upsert(r.toJson());
+      }
+      await logAudit(
+        action: 'UPDATE_LOYALTY_REDEMPTION_RULES',
+        entity: 'Loyalty Redemption Rules',
+        newValue: '${rules.length} tiers updated',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error saving loyalty redemption rules: $e');
+      return false;
+    }
+  }
+
+  // --- BACKUP & RESTORE ---
+  static Future<Map<String, dynamic>> exportDatabaseBackup() async {
+    try {
+      final settings = await getSettings();
+      final products = await getProducts();
+      final customers = await getCustomers();
+      final bills = await getBills();
+      final expenses = await getExpenses();
+      final auditLogs = await getAuditLogs();
+      final sequences = await getSequenceConfigs();
+      final loyaltyRules = await getLoyaltyRules();
+      final loyaltyRedemptions = await getLoyaltyRedemptionRules();
+
+      final backup = {
+        'version': '1.0.0',
+        'exported_at': DateTime.now().toIso8601String(),
+        'settings': settings.toJson(),
+        'sequences': sequences.map((s) => {'key': s.key, 'prefix': s.prefix, 'padding': s.padding, 'current_val': s.currentVal}).toList(),
+        'products': products.map((p) => p.toJson()).toList(),
+        'customers': customers.map((c) => c.toJson()).toList(),
+        'bills': bills.map((b) => b.toJson()).toList(),
+        'expenses': expenses.map((e) => e.toJson()).toList(),
+        'audit_logs': auditLogs.map((a) => a.toJson()).toList(),
+        'loyalty_earning_rules': loyaltyRules.map((r) => r.toJson()).toList(),
+        'loyalty_redemption_rules': loyaltyRedemptions.map((r) => r.toJson()).toList(),
+      };
+
+      await logAudit(
+        action: 'EXPORT_DATABASE_BACKUP',
+        entity: 'System Database',
+        newValue: 'Full Portable JSON Backup generated',
+      );
+
+      return backup;
+    } catch (e) {
+      debugPrint('Error exporting database backup: $e');
+      return {};
+    }
+  }
+
+  // --- HIGH-RISK DATA PURGE ---
+  static Future<bool> purgeBusinessData() async {
+    try {
+      // 1. Delete transactional data
+      await _client.from('bills').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await _client.from('payments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await _client.from('expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // 2. Reset customer transaction balances
+      await _client.from('customers').update({
+        'advance_balance': 0.0,
+        'loyalty_points': 0.0,
+      }).neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // 3. Reset bill & payment sequence counters
+      await _client.from('sequences').update({'current_val': 1}).inFilter('key', ['BILL', 'PAYMENT', 'EXPENSE']);
+
+      // 4. Log immutable purge audit entry
+      await logAudit(
+        action: 'PURGE_ALL_BUSINESS_DATA',
+        entity: 'System Database',
+        newValue: 'Transactional records wiped by Super Admin authorization',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error purging business data: $e');
+      return false;
     }
   }
 }
