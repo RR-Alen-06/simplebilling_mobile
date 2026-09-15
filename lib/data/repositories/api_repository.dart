@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simplebilling_mobile/core/network/supabase_client.dart';
 import 'package:simplebilling_mobile/core/utils/rounding_engine.dart';
+import 'package:simplebilling_mobile/data/mock/mock_data_store.dart';
 import 'package:simplebilling_mobile/data/models/audit_log_model.dart';
 import 'package:simplebilling_mobile/data/models/bill_model.dart';
 import 'package:simplebilling_mobile/data/models/customer_model.dart';
@@ -14,11 +15,15 @@ import 'package:simplebilling_mobile/data/models/product_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 
 class ApiRepository {
-  static final SupabaseClient _client = SupabaseConfig.client;
-  static SupabaseClient get client => _client;
+  static SupabaseClient get client => SupabaseConfig.client;
+  static SupabaseClient get _client => SupabaseConfig.client;
 
   // --- PAYMENTS ---
   static Future<List<PaymentModel>> getPayments() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getPayments();
+    }
+
     try {
       final response = await _client
           .from('payments')
@@ -41,6 +46,10 @@ class ApiRepository {
 
   // --- ATOMIC SEQUENCE GENERATOR (ALIGNED WITH POSTGRES RPC & WEB APP) ---
   static Future<String> getNextSequence(String key) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getNextSequence(key);
+    }
+
     try {
       final res = await _client.rpc(
         'get_next_sequence',
@@ -80,13 +89,8 @@ class ApiRepository {
 
       return '$prefix-${nextVal.toString().padLeft(padding, '0')}';
     } catch (e) {
-      // Fallback timestamp code when offline or no permission
-      final suffix = DateTime.now().millisecondsSinceEpoch.toString().substring(
-        7,
-      );
-      final pfx = key
-          .substring(0, key.length < 3 ? key.length : 3)
-          .toUpperCase();
+      final suffix = DateTime.now().millisecondsSinceEpoch.toString().substring(7);
+      final pfx = key.substring(0, key.length < 3 ? key.length : 3).toUpperCase();
       return '$pfx-$suffix';
     }
   }
@@ -96,15 +100,19 @@ class ApiRepository {
     try {
       final prefs = await SharedPreferences.getInstance();
       final keys = prefs.getKeys();
-      final uid = _client.auth.currentUser?.id;
-      if (uid != null) {
-        for (final k in keys) {
-          if (k.startsWith('printpro-state:$uid')) {
-            await prefs.remove(k);
+      
+      if (!SupabaseConfig.isMockMode) {
+        final uid = _client.auth.currentUser?.id;
+        if (uid != null) {
+          for (final k in keys) {
+            if (k.startsWith('printpro-state:$uid')) {
+              await prefs.remove(k);
+            }
           }
         }
+        await _client.auth.signOut();
       }
-      await _client.auth.signOut();
+      await prefs.remove('printpro_local_auth');
     } catch (e) {
       debugPrint('Error signing out: $e');
     }
@@ -112,6 +120,10 @@ class ApiRepository {
 
   // --- CUSTOMERS & RUNNING DUES LEDGER ---
   static Future<List<CustomerModel>> getCustomers() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getCustomers();
+    }
+
     try {
       final response = await _client
           .from('customers')
@@ -127,6 +139,10 @@ class ApiRepository {
   }
 
   static Future<List<CustomerModel>> getCustomerSummaries() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getCustomerSummaries();
+    }
+
     try {
       final customers = await getCustomers();
       if (customers.isEmpty) return [];
@@ -177,6 +193,10 @@ class ApiRepository {
   }
 
   static Future<CustomerModel?> getCustomer(String id) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getCustomer(id);
+    }
+
     try {
       final res = await _client.from('customers').select('*').eq('id', id).maybeSingle();
       if (res == null) return null;
@@ -216,6 +236,10 @@ class ApiRepository {
   }
 
   static Future<List<CustomerLedgerEntry>> getCustomerLedger(String customerId) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getCustomerLedger(customerId);
+    }
+
     try {
       final billsRes = await _client.from('bills').select('*').eq('customer_id', customerId).order('created_at', ascending: true);
       final paymentsRes = await _client.from('payments').select('*').eq('customer_id', customerId).order('created_at', ascending: true);
@@ -302,6 +326,15 @@ class ApiRepository {
     required String paymentMode,
     String? notes,
   }) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.recordCustomerPayment(
+        customerId: customerId,
+        amount: amount,
+        paymentMethod: paymentMode,
+        notes: notes,
+      );
+    }
+
     try {
       final paymentNumber = await getNextSequence('PAYMENT');
 
@@ -341,7 +374,6 @@ class ApiRepository {
             'paid_total': newPaidTotal,
           }).eq('id', bill['id']);
 
-          // If bill is cleared, unlock deferred loyalty points
           if (newPaidTotal >= grandTotal && pointsEarned > 0) {
             unlockedLoyaltyPoints += pointsEarned;
           }
@@ -350,7 +382,7 @@ class ApiRepository {
         }
       }
 
-      // 3. Update customer advance balance (excess) & loyalty points
+      // 3. Update customer advance balance & loyalty points
       final custRes = await _client.from('customers').select('advance_balance, loyalty_points').eq('id', customerId).single();
       final currentAdvance = (custRes['advance_balance'] as num?)?.toDouble() ?? 0.0;
       final currentLoyalty = (custRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
@@ -382,6 +414,20 @@ class ApiRepository {
     required String reason,
     required String adminPin,
   }) async {
+    if (SupabaseConfig.isMockMode) {
+      final bills = await MockDataStore.instance.getBills();
+      final b = bills.firstWhere((element) => element.id == billId, orElse: () => bills.first);
+      final grandTotal = (b.total - newDiscount + b.gstAmount).clamp(0.0, double.infinity);
+      final paidTotal = b.paidTotal;
+      return MockDataStore.instance.updateBillDiscount(
+        billId: billId,
+        newDiscount: newDiscount,
+        newGrandTotal: grandTotal,
+        newPaidTotal: paidTotal,
+        reason: reason,
+      );
+    }
+
     try {
       final billRes = await _client.from('bills').select('*').eq('id', billId).single();
       final total = (billRes['total'] as num?)?.toDouble() ?? 0.0;
@@ -416,6 +462,15 @@ class ApiRepository {
     String? email,
     double initialAdvance = 0.0,
   }) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.createCustomer({
+        'name': name,
+        'mobile': mobile,
+        'email': email,
+        'advance_balance': initialAdvance,
+      });
+    }
+
     try {
       final customerCode = await getNextSequence('CUSTOMER');
       final response = await _client
@@ -449,6 +504,14 @@ class ApiRepository {
     String? mobile,
     String? email,
   }) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.updateCustomer(id, {
+        'name': name,
+        'mobile': mobile,
+        'email': email,
+      });
+    }
+
     try {
       await _client
           .from('customers')
@@ -465,6 +528,10 @@ class ApiRepository {
 
   // --- PRODUCTS ---
   static Future<List<ProductModel>> getProducts() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getProducts();
+    }
+
     try {
       final response = await _client
           .from('products')
@@ -485,6 +552,15 @@ class ApiRepository {
     double price, {
     String? productCode,
   }) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.createProduct({
+        'name': name,
+        'category': category,
+        'price': price,
+        'product_code': productCode,
+      });
+    }
+
     try {
       final code = productCode ?? await getNextSequence('PRODUCT');
       final response = await _client
@@ -511,6 +587,10 @@ class ApiRepository {
   }
 
   static Future<bool> deleteProduct(String id) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.deleteProduct(id);
+    }
+
     try {
       await _client.from('products').delete().eq('id', id);
       await logAudit(action: 'DELETE_PRODUCT', entity: 'Product ID $id');
@@ -528,12 +608,21 @@ class ApiRepository {
     required double price,
     String? productCode,
   }) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.updateProduct(id, {
+        'name': name,
+        'category': category,
+        'price': price,
+        'product_code': productCode,
+      });
+    }
+
     try {
       await _client.from('products').update({
         'name': name,
         'category': category,
         'price': price,
-        'product_code': ?productCode,
+        'product_code': productCode,
       }).eq('id', id);
 
       await logAudit(
@@ -550,6 +639,10 @@ class ApiRepository {
 
   // --- EXPENSES ---
   static Future<List<ExpenseModel>> getExpenses() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getExpenses();
+    }
+
     try {
       final response = await _client
           .from('expenses')
@@ -571,6 +664,16 @@ class ApiRepository {
     String paymentMode = 'Cash',
     String? notes,
   }) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.createExpense({
+        'title': title,
+        'amount': amount,
+        'category': category,
+        'payment_mode': paymentMode,
+        'notes': notes,
+      });
+    }
+
     try {
       final expenseNum = await getNextSequence('EXPENSE');
       final response = await _client
@@ -599,6 +702,10 @@ class ApiRepository {
   }
 
   static Future<bool> deleteExpense(String id) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.deleteExpense(id);
+    }
+
     try {
       await _client.from('expenses').delete().eq('id', id);
       await logAudit(action: 'DELETE_EXPENSE', entity: 'Expense ID $id');
@@ -611,6 +718,10 @@ class ApiRepository {
 
   // --- AUDIT LOGS ---
   static Future<List<AuditLogModel>> getAuditLogs() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getAuditLogs();
+    }
+
     try {
       final response = await _client
           .from('audit_logs')
@@ -631,6 +742,11 @@ class ApiRepository {
     required String entity,
     String? newValue,
   }) async {
+    if (SupabaseConfig.isMockMode) {
+      await MockDataStore.instance.logAudit(action, '$entity ${newValue ?? ''}');
+      return;
+    }
+
     try {
       final user = _client.auth.currentUser;
       final auditNumber = await getNextSequence('AUDIT');
@@ -648,6 +764,10 @@ class ApiRepository {
 
   // --- DYNAMIC LOYALTY RULES ENGINE ---
   static Future<List<LoyaltyRule>> getLoyaltyRules() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getLoyaltyRules();
+    }
+
     final defaultRules = [
       LoyaltyRule(
         id: 'r-1',
@@ -759,6 +879,10 @@ class ApiRepository {
   }
 
   static Future<List<LoyaltyRedemptionRule>> getLoyaltyRedemptionRules() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getLoyaltyRedemptionRules();
+    }
+
     final defaultRedemption = [
       LoyaltyRedemptionRule(
         id: 'red-1',
@@ -845,6 +969,11 @@ class ApiRepository {
 
   // --- OFFLINE SYNC PAYLOAD REPLAYS ---
   static Future<void> syncCustomerPayload(Map<String, dynamic> payload) async {
+    if (SupabaseConfig.isMockMode) {
+      await MockDataStore.instance.createCustomer(payload);
+      return;
+    }
+
     await _client.from('customers').insert(payload);
     await logAudit(
       action: 'SYNC_CREATE_CUSTOMER',
@@ -854,6 +983,11 @@ class ApiRepository {
   }
 
   static Future<void> syncProductPayload(Map<String, dynamic> payload) async {
+    if (SupabaseConfig.isMockMode) {
+      await MockDataStore.instance.createProduct(payload);
+      return;
+    }
+
     await _client.from('products').insert(payload);
     await logAudit(
       action: 'SYNC_CREATE_PRODUCT',
@@ -863,6 +997,11 @@ class ApiRepository {
   }
 
   static Future<void> syncExpensePayload(Map<String, dynamic> payload) async {
+    if (SupabaseConfig.isMockMode) {
+      await MockDataStore.instance.createExpense(payload);
+      return;
+    }
+
     await _client.from('expenses').insert(payload);
     await logAudit(
       action: 'SYNC_CREATE_EXPENSE',
@@ -872,6 +1011,13 @@ class ApiRepository {
   }
 
   static Future<String> syncBillPayload(Map<String, dynamic> payload) async {
+    if (SupabaseConfig.isMockMode) {
+      final billData = Map<String, dynamic>.from(payload['billData']);
+      final itemsPayload = List<Map<String, dynamic>>.from(payload['itemsPayload']);
+      final created = await MockDataStore.instance.createBill(billData, itemsPayload);
+      return created.id;
+    }
+
     final billData = Map<String, dynamic>.from(payload['billData']);
     final itemsPayload = List<Map<String, dynamic>>.from(
       payload['itemsPayload'],
@@ -895,6 +1041,10 @@ class ApiRepository {
 
   // --- BILLS & POS TRANSACTION ENGINE ---
   static Future<List<BillModel>> getBills() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getBills();
+    }
+
     try {
       final billsData = await _client
           .from('bills')
@@ -936,9 +1086,40 @@ class ApiRepository {
     required double loyaltyPointsRedeemed,
     required List<BillItemModel> items,
   }) async {
+    final paidTotal = cashPaid + upiPaid + cardPaid + advanceUsed;
+
+    if (SupabaseConfig.isMockMode) {
+      final billData = {
+        'customer_id': customerId,
+        'total': total,
+        'discount': discount,
+        'gst_amount': gstAmount,
+        'rounding_method': roundingMethod.name,
+        'rounding_adjustment': roundingAdjustment,
+        'grand_total': grandTotal,
+        'cash_paid': cashPaid,
+        'upi_paid': upiPaid,
+        'card_paid': cardPaid,
+        'paid_total': paidTotal,
+        'advance_used': advanceUsed,
+        'advance_earned': advanceEarned,
+        'payment_method': paymentMethod,
+        'loyalty_points_earned': loyaltyPointsEarned,
+        'loyalty_points_redeemed': loyaltyPointsRedeemed,
+      };
+      final itemsPayload = items.map((i) => {
+        'product_id': i.productId,
+        'product_name': i.productName,
+        'quantity': i.quantity,
+        'unit_price': i.price,
+        'total': i.total,
+      }).toList();
+
+      return MockDataStore.instance.createBill(billData, itemsPayload);
+    }
+
     try {
       final billNumber = await getNextSequence('BILL');
-      final paidTotal = cashPaid + upiPaid + cardPaid + advanceUsed;
 
       final billData = {
         'bill_number': billNumber,
@@ -1067,6 +1248,10 @@ class ApiRepository {
 
   // --- SETTINGS ---
   static Future<AllSettings> getSettings() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getSettings();
+    }
+
     final defaultSettings = AllSettings(
       shop: ShopSettings(
         shopName: 'ABC Printing Center',
@@ -1107,6 +1292,10 @@ class ApiRepository {
   }
 
   static Future<bool> saveSettings(AllSettings settings) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.saveSettings(settings);
+    }
+
     try {
       await _client.from('settings').upsert([
         {'key': 'shop', 'value': settings.shop.toJson()},
@@ -1126,6 +1315,10 @@ class ApiRepository {
 
   // --- DASHBOARD METRICS ---
   static Future<DashboardStatsModel> getDashboardStats() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getDashboardStats();
+    }
+
     try {
       final bills = await getBills();
       final expenses = await getExpenses();
@@ -1183,6 +1376,11 @@ class ApiRepository {
 
   // --- DATABASE SEED UTILITY ---
   static Future<void> seedDefaultCatalogAndCustomers() async {
+    if (SupabaseConfig.isMockMode) {
+      await MockDataStore.instance.initialize();
+      return;
+    }
+
     try {
       final existingProds = await getProducts();
       if (existingProds.isEmpty) {
@@ -1354,6 +1552,10 @@ class ApiRepository {
 
   // --- SEQUENCE CONFIGURATIONS ---
   static Future<List<SequenceConfigModel>> getSequenceConfigs() async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.getSequenceConfigs();
+    }
+
     final defaultConfigs = [
       SequenceConfigModel(key: 'BILL', prefix: 'BILL', padding: 6, currentVal: 1),
       SequenceConfigModel(key: 'PAYMENT', prefix: 'PAY', padding: 6, currentVal: 1),
@@ -1374,6 +1576,10 @@ class ApiRepository {
   }
 
   static Future<bool> saveSequenceConfig(SequenceConfigModel config) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.saveSequenceConfig(config);
+    }
+
     try {
       await _client.from('sequences').upsert({
         'key': config.key,
@@ -1394,6 +1600,10 @@ class ApiRepository {
   }
 
   static Future<bool> saveLoyaltyRules(List<LoyaltyRule> rules) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.saveLoyaltyRules(rules);
+    }
+
     try {
       for (final r in rules) {
         await _client.from('loyalty_rules').upsert(r.toJson());
@@ -1411,6 +1621,10 @@ class ApiRepository {
   }
 
   static Future<bool> saveLoyaltyRedemptionRules(List<LoyaltyRedemptionRule> rules) async {
+    if (SupabaseConfig.isMockMode) {
+      return MockDataStore.instance.saveLoyaltyRedemptionRules(rules);
+    }
+
     try {
       for (final r in rules) {
         await _client.from('loyalty_redemption_rules').upsert(r.toJson());
@@ -1442,6 +1656,7 @@ class ApiRepository {
 
       final backup = {
         'version': '1.0.0',
+        'is_mock_mode': SupabaseConfig.isMockMode,
         'exported_at': DateTime.now().toIso8601String(),
         'settings': settings.toJson(),
         'sequences': sequences.map((s) => {'key': s.key, 'prefix': s.prefix, 'padding': s.padding, 'current_val': s.currentVal}).toList(),
@@ -1469,6 +1684,11 @@ class ApiRepository {
 
   // --- HIGH-RISK DATA PURGE ---
   static Future<bool> purgeBusinessData() async {
+    if (SupabaseConfig.isMockMode) {
+      await MockDataStore.instance.resetToDefaults();
+      return true;
+    }
+
     try {
       // 1. Delete transactional data
       await _client.from('bills').delete().neq('id', '00000000-0000-0000-0000-000000000000');
