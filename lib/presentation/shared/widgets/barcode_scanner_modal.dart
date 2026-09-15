@@ -141,7 +141,7 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal>
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey[300],
+              color: AppColors.neoBorder.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -149,19 +149,27 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(
-                    Icons.qr_code_scanner,
-                    color: AppColors.primary,
-                    size: 24,
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.pastelSky,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.neoBorder, width: 1.2),
+                    ),
+                    child: const Icon(
+                      Icons.qr_code_scanner,
+                      color: AppColors.deepSky,
+                      size: 20,
+                    ),
                   ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Live Barcode & QR Scanner',
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Barcode & QR Scanner',
                     style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
                       color: AppColors.textPrimary,
                     ),
                   ),
@@ -172,7 +180,7 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal>
                   IconButton(
                     icon: Icon(
                       _isTorchOn ? Icons.flash_on : Icons.flash_off,
-                      color: _isTorchOn ? Colors.amber : Colors.grey,
+                      color: _isTorchOn ? Colors.amber[700] : AppColors.textMuted,
                     ),
                     tooltip: 'Toggle Flashlight',
                     onPressed: () async {
@@ -181,19 +189,19 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal>
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.flip_camera_ios, color: Colors.grey),
+                    icon: const Icon(Icons.flip_camera_ios, color: AppColors.textMuted),
                     tooltip: 'Switch Camera',
                     onPressed: () => _cameraController.switchCamera(),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.grey),
+                    icon: const Icon(Icons.close, color: AppColors.textPrimary),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           // Live Camera Viewport
           Expanded(
             child: ClipRRect(
@@ -220,26 +228,26 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal>
                     height: 140,
                     decoration: BoxDecoration(
                       border: Border.all(color: AppColors.primary, width: 2.5),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
                   Positioned(
                     bottom: 12,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
+                        horizontal: 14,
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.65),
+                        color: Colors.black.withValues(alpha: 0.75),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Text(
                         'Align barcode / QR within frame',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -257,16 +265,25 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal>
                   controller: _codeCtrl,
                   decoration: InputDecoration(
                     hintText: 'Or enter barcode / SKU / mobile manually...',
+                    hintStyle: const TextStyle(fontSize: 13, color: AppColors.textMuted),
                     prefixIcon: const Icon(
                       Icons.keyboard,
                       color: AppColors.primary,
                       size: 20,
                     ),
                     filled: true,
-                    fillColor: Colors.grey[100],
+                    fillColor: Colors.white,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+                      borderSide: const BorderSide(color: AppColors.neoBorder, width: 1.5),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.neoBorder, width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.primary, width: 2),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 14,
@@ -281,34 +298,38 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
+                  elevation: 0,
+                  side: const BorderSide(color: AppColors.neoBorder, width: 1.5),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+                    horizontal: 18,
+                    vertical: 14,
                   ),
                 ),
                 onPressed: () => _handleCodeSubmission(_codeCtrl.text),
-                child: const Text('Lookup'),
+                child: const Text('Lookup', style: TextStyle(fontWeight: FontWeight.w800)),
               ),
             ],
           ),
           if (_feedbackMessage != null) ...[
             const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: _isSuccess
-                    ? AppColors.success.withValues(alpha: 0.1)
-                    : AppColors.error.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                color: _isSuccess ? AppColors.pastelMint : AppColors.pastelCoral,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _isSuccess ? AppColors.deepMint : AppColors.deepCoral,
+                  width: 1.2,
+                ),
               ),
               child: Row(
                 children: [
                   Icon(
                     _isSuccess ? Icons.check_circle : Icons.error_outline,
-                    color: _isSuccess ? AppColors.success : AppColors.error,
+                    color: _isSuccess ? AppColors.deepMint : AppColors.deepCoral,
                     size: 18,
                   ),
                   const SizedBox(width: 8),
@@ -316,9 +337,9 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal>
                     child: Text(
                       _feedbackMessage!,
                       style: TextStyle(
-                        color: _isSuccess ? AppColors.success : AppColors.error,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                        color: _isSuccess ? AppColors.deepMint : AppColors.deepCoral,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
