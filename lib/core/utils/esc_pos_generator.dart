@@ -25,8 +25,9 @@ class EscPosGenerator {
     required BillModel bill,
     required ShopSettings shop,
     required BillingSettings billing,
-    int paperWidthCols = 42, // 42 cols for 80mm, 32 cols for 58mm
+    int? paperWidthCols, // If null, derives from billing.defaultPrinterSize
   }) {
+    final cols = paperWidthCols ?? (billing.defaultPrinterSize == '58mm' ? 32 : 42);
     final List<int> bytes = [];
     final curr = billing.currencySymbol.isNotEmpty
         ? billing.currencySymbol
@@ -38,16 +39,16 @@ class EscPosGenerator {
     }
 
     void appendDivider([String char = '-']) {
-      appendLine(char * paperWidthCols);
+      appendLine(char * cols);
     }
 
     void appendRow(String left, String right) {
-      final spaceCount = paperWidthCols - left.length - right.length;
+      final spaceCount = cols - left.length - right.length;
       if (spaceCount > 0) {
         appendLine(left + (' ' * spaceCount) + right);
       } else {
         appendLine(left);
-        appendLine((' ' * (paperWidthCols - right.length)) + right);
+        appendLine((' ' * (cols - right.length)) + right);
       }
     }
 
@@ -134,6 +135,13 @@ class EscPosGenerator {
       appendLine(
         'Loyalty Points Earned: +${bill.loyaltyPointsEarned.toStringAsFixed(0)} pts',
       );
+    }
+
+    if (shop.upiId.isNotEmpty) {
+      appendDivider('-');
+      bytes.addAll(alignCenter);
+      appendLine('UPI PAY: ${shop.upiId}');
+      bytes.addAll(alignLeft);
     }
 
     bytes.addAll(alignCenter);
