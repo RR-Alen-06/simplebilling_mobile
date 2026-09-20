@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/app_colors.dart';
 import 'core/network/realtime_sync_manager.dart';
 import 'core/network/supabase_client.dart';
 import 'core/network/sync_queue_manager.dart';
+import 'data/repositories/api_repository.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/main_shell_screen.dart';
 import 'providers/billing_provider.dart';
@@ -31,30 +33,51 @@ class SimpleBillingApp extends ConsumerStatefulWidget {
 class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
   User? _currentUser;
   bool _isGuestMode = false;
+  bool _isSandboxAuthenticated = false;
 
   @override
   void initState() {
     super.initState();
-    _currentUser = SupabaseConfig.client.auth.currentUser;
-    _setupRealtime();
+    _checkInitialAuth();
+  }
 
-    SupabaseConfig.client.auth.onAuthStateChange.listen((data) {
+  Future<void> _checkInitialAuth() async {
+    final prefs = await SharedPreferences.getInstance();
+    final localAuth = prefs.getString('printpro_local_auth');
+
+    if (SupabaseConfig.isMockMode) {
       if (mounted) {
         setState(() {
-          _currentUser = data.session?.user;
+          _isSandboxAuthenticated = localAuth != null;
         });
-        if (_currentUser != null) {
-          _setupRealtime();
-          SyncQueueManager.instance.initialize();
-        } else {
-          RealtimeSyncManager.instance.unsubscribe();
-        }
       }
-    });
+      return;
+    }
+
+    try {
+      _currentUser = SupabaseConfig.client.auth.currentUser;
+      _setupRealtime();
+
+      SupabaseConfig.client.auth.onAuthStateChange.listen((data) {
+        if (mounted) {
+          setState(() {
+            _currentUser = data.session?.user;
+          });
+          if (_currentUser != null) {
+            _setupRealtime();
+            SyncQueueManager.instance.initialize();
+          } else {
+            RealtimeSyncManager.instance.unsubscribe();
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('Auth initialization error: $e');
+    }
   }
 
   void _setupRealtime() {
-    if (_currentUser == null) return;
+    if (SupabaseConfig.isMockMode || _currentUser == null) return;
 
     RealtimeSyncManager.instance.subscribe(
       onBillsChanged: () {
@@ -77,6 +100,8 @@ class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
 
   @override
   Widget build(BuildContext context) {
+    final isAuthenticated = _currentUser != null || _isGuestMode || _isSandboxAuthenticated;
+
     return MaterialApp(
       title: 'SimpleBilling - Mobile POS',
       debugShowCheckedModeBanner: false,
@@ -91,14 +116,37 @@ class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
         scaffoldBackgroundColor: AppColors.background,
         fontFamily: 'Roboto',
       ),
-      home: (_currentUser != null || _isGuestMode)
-          ? MainShellScreen(onSignOut: () => setState(() {
-              _currentUser = null;
-              _isGuestMode = false;
-            }))
+      home: isAuthenticated
+          ? MainShellScreen(
+              onSignOut: () async {
+                await ApiRepository.signOut();
+                if (mounted) {
+                  setState(() {
+                    _currentUser = null;
+                    _isGuestMode = false;
+                    _isSandboxAuthenticated = false;
+                  });
+                }
+              },
+            )
           : LoginScreen(
-              onLoginSuccess: () => setState(() => _currentUser = SupabaseConfig.client.auth.currentUser),
-              onGuestLogin: () => setState(() => _isGuestMode = true),
+              onLoginSuccess: () {
+                if (mounted) {
+                  setState(() {
+                    _isSandboxAuthenticated = true;
+                    if (!SupabaseConfig.isMockMode) {
+                      try {
+                        _currentUser = SupabaseConfig.client.auth.currentUser;
+                      } catch (_) {}
+                    }
+                  });
+                }
+              },
+              onGuestLogin: () {
+                if (mounted) {
+                  setState(() => _isGuestMode = true);
+                }
+              },
             ),
     );
   }
