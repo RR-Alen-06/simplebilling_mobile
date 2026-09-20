@@ -1,4 +1,4 @@
-﻿class BillModel {
+class BillModel {
   final String id;
   final String? userId;
   final String billNumber;
@@ -23,6 +23,7 @@
   final double loyaltyPointsRedeemed;
   final String createdAt;
   final String? clientRef;
+  final bool isEdited;
   final List<BillItemModel> items;
 
   BillModel({
@@ -50,6 +51,7 @@
     this.loyaltyPointsRedeemed = 0.0,
     required this.createdAt,
     this.clientRef,
+    this.isEdited = false,
     required this.items,
   });
 
@@ -87,6 +89,7 @@
       loyaltyPointsRedeemed: (json['loyalty_points_redeemed'] as num?)?.toDouble() ?? 0.0,
       createdAt: json['created_at'] as String? ?? DateTime.now().toIso8601String(),
       clientRef: json['client_ref'] as String?,
+      isEdited: json['is_edited'] as bool? ?? false,
       items: parsedItems,
     );
   }
@@ -114,8 +117,11 @@
       'loyalty_points_redeemed': loyaltyPointsRedeemed,
       'created_at': createdAt,
       if (clientRef != null) 'client_ref': clientRef,
+      'is_edited': isEdited,
     };
   }
+
+  double get balanceDue => (grandTotal - paidTotal).clamp(0.0, double.infinity);
 }
 
 class BillItemModel {
@@ -126,6 +132,8 @@ class BillItemModel {
   final double quantity;
   final double price;
   final double total;
+
+  double get unitPrice => price;
 
   BillItemModel({
     this.id,

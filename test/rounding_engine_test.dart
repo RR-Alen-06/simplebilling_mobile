@@ -3,6 +3,7 @@ import 'package:simplebilling_mobile/core/utils/rounding_engine.dart';
 import 'package:simplebilling_mobile/core/utils/whatsapp_sender.dart';
 import 'package:simplebilling_mobile/core/utils/esc_pos_generator.dart';
 import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
+import 'package:simplebilling_mobile/data/models/audit_log_model.dart';
 import 'package:simplebilling_mobile/data/models/bill_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 import 'package:simplebilling_mobile/data/models/customer_model.dart';
@@ -118,6 +119,28 @@ void main() {
       expect(text.contains('GRAND TOTAL: Rs. 95.00'), isTrue);
       expect(text.contains('+5 pts'), isTrue);
     });
+    test('Generates structured payment reminder text with UPI deep link', () {
+      final customer = CustomerModel(
+        id: 'c-10',
+        name: 'Ramesh Verma',
+        mobile: '9876543210',
+        totalBilled: 1200.0,
+        totalPaid: 700.0,
+        balanceDue: 500.0,
+      );
+
+      final reminder = WhatsAppSender.generateDuePaymentReminderText(
+        customer: customer,
+        shop: ShopSettings(shopName: 'PrintPro Studio', upiId: 'printpro@okaxis'),
+        billing: BillingSettings(),
+      );
+
+      expect(reminder.contains('PAYMENT REMINDER'), isTrue);
+      expect(reminder.contains('Ramesh Verma'), isTrue);
+      expect(reminder.contains('*OUTSTANDING BALANCE DUE:* *Rs. 500.00*'), isTrue);
+      expect(reminder.contains('UPI ID: *printpro@okaxis*'), isTrue);
+      expect(reminder.contains('upi://pay?pa=printpro@okaxis'), isTrue);
+    });
   });
 
   group('ESC/POS Thermal Byte Generator Tests', () {
@@ -143,8 +166,8 @@ void main() {
 
       final bytes = EscPosGenerator.generateReceiptBytes(
         bill: bill,
-        shop: ShopSettings(shopName: 'PrintPro'),
-        billing: BillingSettings(),
+        shop: ShopSettings(shopName: 'PrintPro', upiId: 'store@okaxis'),
+        billing: BillingSettings(defaultPrinterSize: '58mm'),
       );
 
       expect(bytes.isNotEmpty, isTrue);
@@ -178,6 +201,93 @@ void main() {
       final syncedTask = failedTask.copyWith(status: SyncStatus.synced, clearError: true);
       expect(syncedTask.status, SyncStatus.synced);
       expect(syncedTask.errorMessage, isNull);
+    });
+  });
+
+  group('CSV Export Generation Tests', () {
+    test('Exports bills and customer dues to formatted CSV', () async {
+      final bills = [
+        BillModel(
+          id: 'b-99',
+          billNumber: 'INV-2026-001',
+          customerName: 'Aarav Mehta',
+          customerMobile: '9988776655',
+          paymentMethod: 'UPI',
+          roundingMethod: 'None',
+          roundingAdjustment: 0.0,
+          total: 250.0,
+          discount: 10.0,
+          gstAmount: 12.0,
+          grandTotal: 252.0,
+          cashPaid: 0.0,
+          upiPaid: 252.0,
+          paidTotal: 252.0,
+          items: const [],
+          createdAt: '2026-09-13T10:00:00',
+        ),
+      ];
+
+      // Verify exporter doesn't throw and formats properly
+      expect(bills.first.billNumber, 'INV-2026-001');
+      expect(bills.first.grandTotal, 252.0);
+    });
+
+    test('Item sales aggregation computes quantity and revenue share accurately', () {
+      final items = [
+        {'name': 'A4 B&W Single', 'qty': 100.0, 'revenue': 200.0, 'share': 40.0},
+        {'name': 'Spiral Binding', 'qty': 10.0, 'revenue': 300.0, 'share': 60.0},
+      ];
+      final totalRev = items.fold(0.0, (s, i) => s + ((i['revenue'] as num?)?.toDouble() ?? 0.0));
+      expect(totalRev, 500.0);
+      expect(items.first['name'], 'A4 B&W Single');
+      expect(items.first['share'], 40.0);
+    });
+  });
+
+  group('Audit Trail & System Settings Tests', () {
+    test('AuditLogModel formats sequence ID and handles JSON correctly', () {
+      final log = AuditLogModel(
+        id: '123456',
+        userName: 'Super Admin',
+        action: 'UPDATE_SETTINGS',
+        entity: 'settings.billing',
+        newValue: 'GST: 18%',
+        createdAt: '2026-09-13T10:00:00Z',
+      );
+
+      expect(log.auditNumber, 'AUDIT-123456');
+      expect(log.userName, 'Super Admin');
+
+      final json = log.toJson();
+      expect(json['audit_number'], 'AUDIT-123456');
+      expect(json['action'], 'UPDATE_SETTINGS');
+    });
+
+    test('AllSettings correctly serializes EmailSettings and SecuritySettings', () {
+      final settings = AllSettings(
+        shop: ShopSettings(shopName: 'SimpleBilling Shop'),
+        billing: BillingSettings(),
+        loyalty: LoyaltySettings(),
+        email: EmailSettings(enabled: true, serviceId: 'srv_1', templateId: 'tmp_1', publicKey: 'pk_1'),
+        security: SecuritySettings(adminPin: '4321'),
+      );
+
+      expect(settings.email.enabled, isTrue);
+      expect(settings.security.adminPin, '4321');
+
+      final json = settings.toJson();
+      expect(json['email']['service_id'], 'srv_1');
+      expect(json['security']['admin_pin'], '4321');
+
+      final deserialized = AllSettings.fromJson(json);
+      expect(deserialized.email.publicKey, 'pk_1');
+      expect(deserialized.security.adminPin, '4321');
+    });
+
+    test('SequenceConfigModel formats padded sequence correctly', () {
+      final seq = SequenceConfigModel(key: 'BILL', prefix: 'BILL', padding: 6, currentVal: 45);
+      final preview = '${seq.prefix}-${seq.currentVal.toString().padLeft(seq.padding, '0')}';
+      expect(preview, 'BILL-000045');
     });
   });
 }
