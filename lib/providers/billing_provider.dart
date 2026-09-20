@@ -202,6 +202,22 @@ class CartNotifier extends StateNotifier<CartState> {
     state = state.copyWith(discountType: type, discountValue: value);
   }
 
+  void setManualDiscount(double value) {
+    setDiscount('FLAT', value);
+  }
+
+  void incrementQuantity(int index) {
+    if (index >= 0 && index < state.items.length) {
+      updateItemQuantity(index, state.items[index].quantity + 1);
+    }
+  }
+
+  void decrementQuantity(int index) {
+    if (index >= 0 && index < state.items.length) {
+      updateItemQuantity(index, state.items[index].quantity - 1);
+    }
+  }
+
   void setRoundingMethod(RoundingMethod method) {
     state = state.copyWith(roundingMethod: method);
   }

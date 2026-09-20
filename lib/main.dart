@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'core/constants/app_colors.dart';
+import 'core/constants/app_theme.dart';
 import 'core/network/realtime_sync_manager.dart';
 import 'core/network/supabase_client.dart';
 import 'core/network/sync_queue_manager.dart';
@@ -80,17 +80,7 @@ class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
     return MaterialApp(
       title: 'PrintPro ERP & Billing',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
-          primary: AppColors.primary,
-          secondary: AppColors.secondary,
-          surface: AppColors.surface,
-        ),
-        scaffoldBackgroundColor: AppColors.background,
-        fontFamily: 'Roboto',
-      ),
+      theme: AppTheme.lightTheme,
       home: (_currentUser != null || _isGuestMode)
           ? MainShellScreen(onSignOut: () => setState(() {
               _currentUser = null;
