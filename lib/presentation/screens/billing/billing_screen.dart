@@ -25,9 +25,9 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
   late TabController _tabController;
 
   // Custom entry controllers
-  final TextEditingController _customNameCtrl = TextEditingController(text: 'A4 B&W Single');
+  final TextEditingController _customNameCtrl = TextEditingController(text: 'General Item');
   final TextEditingController _customQtyCtrl = TextEditingController(text: '1');
-  final TextEditingController _customPriceCtrl = TextEditingController(text: '2.00');
+  final TextEditingController _customPriceCtrl = TextEditingController(text: '10.00');
 
   // Search & Payment controllers
   final TextEditingController _searchCtrl = TextEditingController();
@@ -63,12 +63,19 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
     super.dispose();
   }
 
-  void _addQuickPreset(String name, double price, [double qty = 1.0]) {
-    ref.read(cartProvider.notifier).addItem(name, price, qty);
+  void _addQuickPreset(String name, double price, [double qty = 1.0, String? productId]) {
+    ref.read(cartProvider.notifier).addItem(name, price, qty, productId: productId);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Added "$name" to cart'),
-        duration: const Duration(milliseconds: 500),
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.white, size: 16),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Added "$name" (₹${price.toStringAsFixed(2)})')),
+          ],
+        ),
+        backgroundColor: AppColors.primary,
+        duration: const Duration(milliseconds: 600),
       ),
     );
   }
@@ -82,13 +89,415 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
     ref.read(cartProvider.notifier).addItem(name, price, qty);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Added "$name" ($qty x Rs. $price)'),
-        duration: const Duration(milliseconds: 500),
+        content: Text('Added "$name" ($qty x ₹${price.toStringAsFixed(2)})'),
+        backgroundColor: AppColors.deepMint,
+        duration: const Duration(milliseconds: 700),
       ),
     );
   }
 
+  void _showQuickAddCustomItemModal() {
+    final nameCtrl = TextEditingController();
+    final qtyCtrl = TextEditingController(text: '1');
+    final priceCtrl = TextEditingController();
 
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          final qty = double.tryParse(qtyCtrl.text) ?? 1.0;
+          final price = double.tryParse(priceCtrl.text) ?? 0.0;
+          final total = qty * price;
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.pastelSky,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.add_shopping_cart_rounded, color: AppColors.deepSky, size: 20),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text('Quick Add Custom Item', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Item Description *',
+                      hintText: 'Enter item name or service',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Quantity', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: const Icon(Icons.remove_circle, color: AppColors.deepCoral, size: 28),
+                                  onPressed: () {
+                                    if (qty > 1) {
+                                      qtyCtrl.text = (qty - 1).toStringAsFixed(0);
+                                      setDialogState(() {});
+                                    }
+                                  },
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: TextField(
+                                    controller: qtyCtrl,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(vertical: 8),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    onChanged: (_) => setDialogState(() {}),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: const Icon(Icons.add_circle, color: AppColors.deepMint, size: 28),
+                                  onPressed: () {
+                                    qtyCtrl.text = (qty + 1).toStringAsFixed(0);
+                                    setDialogState(() {});
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Unit Rate (₹) *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                            const SizedBox(height: 4),
+                            TextField(
+                              controller: priceCtrl,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                              decoration: const InputDecoration(
+                                prefixText: '₹ ',
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (_) => setDialogState(() {}),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Multiplier chips
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [1, 2, 5, 10, 25, 50].map((m) {
+                      return ActionChip(
+                        label: Text('$m', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        backgroundColor: AppColors.pastelSky,
+                        onPressed: () {
+                          qtyCtrl.text = m.toString();
+                          setDialogState(() {});
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.pastelMint,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.borderMint),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Line Total:', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.deepMint)),
+                        Text(
+                          Formatters.currency(total),
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.deepMint),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+                onPressed: () {
+                  final name = nameCtrl.text.trim();
+                  final q = double.tryParse(qtyCtrl.text) ?? 1.0;
+                  final p = double.tryParse(priceCtrl.text) ?? 0.0;
+                  if (name.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter an item description')),
+                    );
+                    return;
+                  }
+                  if (q <= 0 || p < 0) return;
+                  ref.read(cartProvider.notifier).addItem(name, p, q);
+                  Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Added "$name" ($q x ₹${p.toStringAsFixed(2)})'),
+                      backgroundColor: AppColors.deepMint,
+                      duration: const Duration(milliseconds: 600),
+                    ),
+                  );
+                },
+                child: const Text('Add to Cart', style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showEditCartItemDialog(int index, BillItemModel item) {
+    final nameCtrl = TextEditingController(text: item.productName);
+    final qtyCtrl = TextEditingController(text: item.quantity % 1 == 0 ? item.quantity.toStringAsFixed(0) : item.quantity.toStringAsFixed(2));
+    final priceCtrl = TextEditingController(text: item.price.toStringAsFixed(2));
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final currentQty = double.tryParse(qtyCtrl.text) ?? 1.0;
+          final currentPrice = double.tryParse(priceCtrl.text) ?? 0.0;
+          final currentTotal = currentQty * currentPrice;
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.pastelSky,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.edit_note_rounded, color: AppColors.deepSky, size: 20),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text('Edit Line Item', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Item Description',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Quantity', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: const Icon(Icons.remove_circle, color: AppColors.deepCoral, size: 28),
+                                  onPressed: () {
+                                    if (currentQty > 1) {
+                                      qtyCtrl.text = (currentQty - 1).toStringAsFixed(0);
+                                      setDialogState(() {});
+                                    }
+                                  },
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: TextField(
+                                    controller: qtyCtrl,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(vertical: 8),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    onChanged: (_) => setDialogState(() {}),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: const Icon(Icons.add_circle, color: AppColors.deepMint, size: 28),
+                                  onPressed: () {
+                                    qtyCtrl.text = (currentQty + 1).toStringAsFixed(0);
+                                    setDialogState(() {});
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Unit Rate (₹)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                            const SizedBox(height: 4),
+                            TextField(
+                              controller: priceCtrl,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                              decoration: const InputDecoration(
+                                prefixText: '₹ ',
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (_) => setDialogState(() {}),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Quick Multiplier Chips for Quantity
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [1, 2, 5, 10, 25, 50].map((q) {
+                      return ActionChip(
+                        label: Text('$q', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        backgroundColor: AppColors.pastelSky,
+                        onPressed: () {
+                          qtyCtrl.text = q.toString();
+                          setDialogState(() {});
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.pastelMint,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.borderMint),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Line Total:', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.deepMint)),
+                        Text(
+                          Formatters.currency(currentTotal),
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.deepMint),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  ref.read(cartProvider.notifier).removeItem(index);
+                  Navigator.of(ctx).pop();
+                },
+                child: const Text('Remove Item', style: TextStyle(color: AppColors.deepCoral, fontWeight: FontWeight.w700)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  final newName = nameCtrl.text.trim();
+                  final newQty = double.tryParse(qtyCtrl.text) ?? item.quantity;
+                  final newPrice = double.tryParse(priceCtrl.text) ?? item.price;
+                  if (newName.isNotEmpty && newQty > 0 && newPrice >= 0) {
+                    ref.read(cartProvider.notifier).updateItem(
+                      index,
+                      productName: newName,
+                      quantity: newQty,
+                      price: newPrice,
+                    );
+                  }
+                  Navigator.of(ctx).pop();
+                },
+                child: const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
   void _openBarcodeScanner(List<ProductModel> products, List<CustomerModel> customers) {
     BarcodeScannerModal.show(
@@ -98,7 +507,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
       onProductScanned: (product) {
         ref.read(cartProvider.notifier).addItem(product.name, product.price, 1, productId: product.id);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Scanned & Added: ${product.name} (Rs. ${product.price})')),
+          SnackBar(content: Text('Scanned & Added: ${product.name} (₹${product.price})')),
         );
       },
       onCustomerScanned: (customer) {
@@ -862,6 +1271,14 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 3,
+        icon: const Icon(Icons.add_shopping_cart_rounded, size: 20),
+        label: const Text('+ Custom Item', style: TextStyle(fontWeight: FontWeight.w800)),
+        onPressed: _showQuickAddCustomItemModal,
+      ),
       appBar: AppBar(
         title: const Text(
           'SimpleBilling POS Terminal',
@@ -888,78 +1305,78 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
           ),
         ],
       ),
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final isWidescreen = constraints.maxWidth >= 850;
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWidescreen = constraints.maxWidth >= 850;
 
-            if (isWidescreen) {
-              // Desktop Split-Screen POS Layout
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left Side (60%): Customer selector + Tabs (Presets, Catalog, Custom)
-                  Expanded(
-                    flex: 6,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildCustomerSelectorAndLedger(customersAsync.valueOrNull ?? []),
-                          const SizedBox(height: 10),
-                          _buildTabsHeader(),
-                          const SizedBox(height: 10),
-                          _buildActiveTabContent(productsAsync.valueOrNull ?? []),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const VerticalDivider(width: 1, color: AppColors.border),
-
-                  // Right Side (40%): Sticky Live Cart & Instant Checkout
-                  Expanded(
-                    flex: 4,
-                    child: Container(
-                      color: Colors.white,
-                      padding: const EdgeInsets.all(12),
-                      child: _buildCartAndCheckoutPanel(
-                        cart,
-                        settings,
-                        loyaltyDiscount,
-                        gstAmount,
-                        roundingResult,
-                        loyaltyRules,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-
-            // Mobile / Tablet POS Layout
-            return Column(
+          if (isWidescreen) {
+            // Desktop / Wide Split-Screen POS Layout
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Left Side (58%): Customer selector + Tabs (Quick POS, Catalog, Custom Sale)
                 Expanded(
+                  flex: 6,
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildCustomerSelectorAndLedger(customersAsync.valueOrNull ?? []),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
                         _buildTabsHeader(),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
                         _buildActiveTabContent(productsAsync.valueOrNull ?? []),
                       ],
                     ),
                   ),
                 ),
-                _buildMobileCartSummaryBar(cart, grandTotal),
+                const VerticalDivider(width: 1, color: AppColors.border),
+
+                // Right Side (42%): Sticky Live Cart & Instant Checkout
+                Expanded(
+                  flex: 4,
+                  child: Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(14),
+                    child: _buildCartAndCheckoutPanel(
+                      cart,
+                      settings,
+                      loyaltyDiscount,
+                      gstAmount,
+                      roundingResult,
+                      loyaltyRules,
+                    ),
+                  ),
+                ),
               ],
             );
-          },
-        ),
-      );
+          }
+
+          // Mobile / Compact POS Layout
+          return Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildCustomerSelectorAndLedger(customersAsync.valueOrNull ?? []),
+                      const SizedBox(height: 12),
+                      _buildTabsHeader(),
+                      const SizedBox(height: 12),
+                      _buildActiveTabContent(productsAsync.valueOrNull ?? []),
+                    ],
+                  ),
+                ),
+              ),
+              _buildMobileCartSummaryBar(cart, grandTotal),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildCustomerSelectorAndLedger(List<CustomerModel> customers) {
@@ -1092,15 +1509,15 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
       ),
       child: TabBar(
         controller: _tabController,
-        labelColor: AppColors.deepLavender,
+        labelColor: AppColors.primary,
         unselectedLabelColor: AppColors.textSecondary,
-        indicatorColor: AppColors.deepLavender,
+        indicatorColor: AppColors.primary,
         indicatorWeight: 3,
         labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
         tabs: const [
-          Tab(text: '⚡ Xerox Presets'),
+          Tab(text: '⚡ Quick POS'),
           Tab(text: '📦 Catalog'),
-          Tab(text: '✏️ Custom Add'),
+          Tab(text: '✏️ Custom Sale'),
         ],
         onTap: (_) => setState(() {}),
       ),
@@ -1109,7 +1526,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
 
   Widget _buildActiveTabContent(List<ProductModel> products) {
     if (_tabController.index == 0) {
-      return _buildXeroxPresetsGrid();
+      return _buildQuickActionTiles(products);
     } else if (_tabController.index == 1) {
       return _buildCatalogTab(products);
     } else {
@@ -1117,79 +1534,135 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
     }
   }
 
-  Widget _buildXeroxPresetsGrid() {
-    final presets = [
-      {'name': 'A4 B&W Single', 'price': 2.0, 'color': AppColors.pastelMint, 'textColor': AppColors.deepMint},
-      {'name': 'A4 B&W Back to Back', 'price': 3.0, 'color': AppColors.pastelMint, 'textColor': AppColors.deepMint},
-      {'name': 'A4 Color Single', 'price': 10.0, 'color': AppColors.pastelSky, 'textColor': AppColors.deepSky},
-      {'name': 'A4 Color B2B', 'price': 15.0, 'color': AppColors.pastelSky, 'textColor': AppColors.deepSky},
-      {'name': 'A3 B&W Single', 'price': 5.0, 'color': AppColors.pastelLavender, 'textColor': AppColors.deepLavender},
-      {'name': 'A3 Color Print', 'price': 20.0, 'color': AppColors.pastelLavender, 'textColor': AppColors.deepLavender},
-      {'name': 'Spiral Binding', 'price': 40.0, 'color': AppColors.pastelAmber, 'textColor': AppColors.deepAmber},
-      {'name': 'Soft / Hard Binding', 'price': 80.0, 'color': AppColors.pastelAmber, 'textColor': AppColors.deepAmber},
-      {'name': 'Lamination (A4)', 'price': 30.0, 'color': AppColors.pastelCoral, 'textColor': AppColors.deepCoral},
-      {'name': 'Passport Photo (8 Pcs)', 'price': 60.0, 'color': AppColors.pastelCoral, 'textColor': AppColors.deepCoral},
+  Widget _buildQuickActionTiles(List<ProductModel> products) {
+    final topProducts = products.take(8).toList();
+
+    // Standard fast utility tiles
+    final quickTiles = [
+      ...topProducts.map((p) => {
+            'name': p.name,
+            'price': p.price,
+            'category': p.category,
+            'color': AppColors.pastelSky,
+            'textColor': AppColors.deepSky,
+            'productId': p.id,
+            'productCode': p.productCode,
+          }),
+      if (topProducts.isEmpty) ...[
+        {'name': 'Standard Item', 'price': 100.0, 'category': 'General', 'color': AppColors.pastelMint, 'textColor': AppColors.deepMint},
+        {'name': 'Service Fee', 'price': 50.0, 'category': 'Service', 'color': AppColors.pastelSky, 'textColor': AppColors.deepSky},
+        {'name': 'Quick Sale 1', 'price': 20.0, 'category': 'General', 'color': AppColors.pastelLavender, 'textColor': AppColors.deepLavender},
+        {'name': 'Quick Sale 2', 'price': 500.0, 'category': 'General', 'color': AppColors.pastelAmber, 'textColor': AppColors.deepAmber},
+      ],
     ];
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 2.2,
-      ),
-      itemCount: presets.length,
-      itemBuilder: (ctx, i) {
-        final p = presets[i];
-        final name = p['name'] as String;
-        final price = p['price'] as double;
-        final bgColor = p['color'] as Color;
-        final textColor = p['textColor'] as Color;
-
-        return InkWell(
-          onTap: () => _addQuickPreset(name, price),
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.neoBorder, width: 1.5),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    name,
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: textColor),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.neoBorder),
-                  ),
-                  child: Text('₹${price.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.textPrimary)),
-                ),
-              ],
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Popular & Quick-Sale Tiles', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+            Text('${quickTiles.length} quick items', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 2.1,
           ),
-        );
-      },
+          itemCount: quickTiles.length,
+          itemBuilder: (ctx, i) {
+            final p = quickTiles[i];
+            final name = p['name'] as String;
+            final price = p['price'] as double;
+            final category = (p['category'] as String?) ?? 'General';
+            final bgColor = (p['color'] as Color?) ?? AppColors.pastelSky;
+            final textColor = (p['textColor'] as Color?) ?? AppColors.deepSky;
+            final productId = p['productId'] as String?;
+            final code = p['productCode'] as String?;
+
+            return InkWell(
+              onTap: () => _addQuickPreset(name, price, 1.0, productId),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.neoBorder, width: 1.5),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            name,
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: textColor),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(
+                                category,
+                                style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                              ),
+                              if (code != null && code.isNotEmpty) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                  '• #$code',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textMuted,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.neoBorder),
+                      ),
+                      child: Text(
+                        '₹${price.toStringAsFixed(0)}',
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.textPrimary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
   Widget _buildCatalogTab(List<ProductModel> products) {
-    final categories = ['All', 'Xerox', 'Print', 'Paper', 'Binding', 'Stationery', 'Other'];
+    final Set<String> allCategories = {'All', ...products.map((p) => p.category.trim()).where((c) => c.isNotEmpty)};
+    final categories = allCategories.toList();
+
     final filtered = products.where((p) {
-      final matchesSearch = p.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesSearch = p.name.toLowerCase().contains(_searchQuery.toLowerCase()) || (p.productCode != null && p.productCode!.contains(_searchQuery));
       final matchesCategory = _selectedCategory == 'All' || p.category.toLowerCase() == _selectedCategory.toLowerCase();
       return matchesSearch && matchesCategory;
     }).toList();
@@ -1201,15 +1674,24 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
         TextField(
           controller: _searchCtrl,
           decoration: InputDecoration(
-            hintText: 'Search products by name / barcode...',
+            hintText: 'Search products by name or barcode...',
             prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () {
+                      _searchCtrl.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                  )
+                : null,
             filled: true,
             fillColor: Colors.white,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
           onChanged: (val) => setState(() => _searchQuery = val),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
 
         // Category chips
         SingleChildScrollView(
@@ -1220,7 +1702,14 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
               return Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: ChoiceChip(
-                  label: Text(cat, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11.5, color: isSelected ? Colors.white : AppColors.textPrimary)),
+                  label: Text(
+                    cat,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11.5,
+                      color: isSelected ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
                   selected: isSelected,
                   selectedColor: AppColors.primary,
                   backgroundColor: Colors.white,
@@ -1237,9 +1726,16 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
 
         // Product cards list
         if (filtered.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: Text('No matching products in catalog', style: TextStyle(color: AppColors.textMuted))),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 32),
+            alignment: Alignment.center,
+            child: const Column(
+              children: [
+                Icon(Icons.inventory_2_outlined, size: 36, color: AppColors.textMuted),
+                SizedBox(height: 8),
+                Text('No matching products found', style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+              ],
+            ),
           )
         else
           ListView.separated(
@@ -1263,11 +1759,30 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(p.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
-                          Text('Category: ${p.category}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.pastelLavender,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(p.category, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.deepLavender)),
+                              ),
+                              if (p.productCode != null && p.productCode!.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Text('#${p.productCode}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+                              ],
+                            ],
+                          ),
                         ],
                       ),
                     ),
-                    Text('₹${p.price.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: AppColors.primary)),
+                    Text(
+                      '₹${p.price.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: AppColors.primary),
+                    ),
                     const SizedBox(width: 10),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
@@ -1278,7 +1793,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
-                      onPressed: () => _addQuickPreset(p.name, p.price, 1),
+                      onPressed: () => _addQuickPreset(p.name, p.price, 1, p.id),
                       child: const Text('+ Add', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
                     ),
                   ],
@@ -1301,11 +1816,15 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Fast Custom Xerox / Print Entry', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+          const Text('Quick Custom Item Entry', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
           const SizedBox(height: 12),
           TextField(
             controller: _customNameCtrl,
-            decoration: const InputDecoration(labelText: 'Item / Service Description *', hintText: 'e.g. A4 Double Side Xerox'),
+            decoration: const InputDecoration(
+              labelText: 'Item / Service Description *',
+              hintText: 'e.g. Custom Repair, Special Order',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -1314,7 +1833,10 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
                 child: TextField(
                   controller: _customQtyCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Page Quantity *'),
+                  decoration: const InputDecoration(
+                    labelText: 'Quantity *',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1322,7 +1844,11 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
                 child: TextField(
                   controller: _customPriceCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Unit Rate (₹) *'),
+                  decoration: const InputDecoration(
+                    labelText: 'Unit Rate (₹) *',
+                    prefixText: '₹ ',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
               ),
             ],
@@ -1383,9 +1909,9 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
           children: [
             Row(
               children: [
-                const Icon(Icons.shopping_bag_rounded, color: AppColors.deepLavender, size: 20),
+                const Icon(Icons.shopping_bag_rounded, color: AppColors.primary, size: 20),
                 const SizedBox(width: 6),
-                Text('Active Cart (${cart.items.length})', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                Text('Active Bill Cart (${cart.items.length})', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
               ],
             ),
             if (cart.items.isNotEmpty)
@@ -1398,71 +1924,103 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
         const Divider(height: 1),
         const SizedBox(height: 8),
 
-        // Cart items scroll list with IN-LINE RATE OVERRIDES
+        // Cart items scroll list with IN-LINE RATE OVERRIDES & TAP TO EDIT
         Expanded(
           child: cart.items.isEmpty
-              ? const Center(
-                  child: Text('Your cart is empty.\nTap presets or catalog items to add.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted)),
-                )
-              : ListView.separated(
-                  itemCount: cart.items.length,
-                  separatorBuilder: (c, i) => const Divider(height: 12),
-                  itemBuilder: (ctx, i) {
-                    final it = cart.items[i];
-                    return Row(
-                      children: [
-                        Expanded(
-                          flex: 4,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(it.productName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5), overflow: TextOverflow.ellipsis),
-                              Row(
-                                children: [
-                                  const Text('Rate: ₹', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                                  // Inline Unit Rate Override Input
-                                  SizedBox(
-                                    width: 50,
-                                    height: 24,
-                                    child: TextField(
-                                      keyboardType: TextInputType.number,
-                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                                      decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 2), isDense: true),
-                                      controller: TextEditingController(text: it.price.toStringAsFixed(2)),
-                                      onSubmitted: (val) {
-                                        final p = double.tryParse(val);
-                                        if (p != null) ref.read(cartProvider.notifier).updateItemPrice(i, p);
-                                      },
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.shopping_cart_outlined, size: 40, color: AppColors.textMuted.withAlpha(128)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Cart is empty.\nTap quick tiles or catalog to add items.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                    ),
+                  ],
+                ),
+              )
+            : ListView.separated(
+                itemCount: cart.items.length,
+                separatorBuilder: (c, i) => const Divider(height: 10),
+                itemBuilder: (ctx, i) {
+                  final it = cart.items[i];
+                  return InkWell(
+                    onTap: () => _showEditCartItemDialog(i, it),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 4,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        it.productName,
+                                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    const Icon(Icons.edit_outlined, size: 14, color: AppColors.textMuted),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    const Text('Rate: ₹', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                    Text(
+                                      it.price.toStringAsFixed(2),
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primary),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Qty + / - controls
+                          Row(
+                            children: [
+                              IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                icon: const Icon(Icons.remove_circle_outline, size: 18, color: AppColors.deepCoral),
+                                onPressed: () => ref.read(cartProvider.notifier).updateItemQuantity(i, it.quantity - 1),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                child: Text(
+                                  it.quantity % 1 == 0 ? it.quantity.toStringAsFixed(0) : it.quantity.toStringAsFixed(2),
+                                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                                ),
+                              ),
+                              IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                icon: const Icon(Icons.add_circle_outline, size: 18, color: AppColors.deepMint),
+                                onPressed: () => ref.read(cartProvider.notifier).updateItemQuantity(i, it.quantity + 1),
                               ),
                             ],
                           ),
-                        ),
-                        // Qty + / - controls
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.remove_circle_outline, size: 18),
-                              onPressed: () => ref.read(cartProvider.notifier).updateItemQuantity(i, it.quantity - 1),
-                            ),
-                            Text(it.quantity.toStringAsFixed(0), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
-                            IconButton(
-                              icon: const Icon(Icons.add_circle_outline, size: 18),
-                              onPressed: () => ref.read(cartProvider.notifier).updateItemQuantity(i, it.quantity + 1),
-                            ),
-                          ],
-                        ),
-                        Text(Formatters.currency(it.total), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.deepCoral),
-                          onPressed: () => ref.read(cartProvider.notifier).removeItem(i),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+                          const SizedBox(width: 8),
+                          Text(Formatters.currency(it.total), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                          IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                            icon: const Icon(Icons.close, size: 16, color: AppColors.textMuted),
+                            onPressed: () => ref.read(cartProvider.notifier).removeItem(i),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
         ),
 
         const Divider(height: 1),
@@ -1485,7 +2043,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Loyalty Redemption Slider / Tiers
+        // Loyalty Redemption Section
         if (cart.selectedCustomer != null && cart.selectedCustomer!.loyaltyPoints >= 10 && settings.loyalty.enabled) ...[
           Container(
             padding: const EdgeInsets.all(8),
@@ -1508,7 +2066,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
                 const SizedBox(height: 4),
                 Wrap(
                   spacing: 6,
-                  children: [10, 20, 30, 40, 50].where((pts) => pts <= cart.selectedCustomer!.loyaltyPoints).map((pts) {
+                  children: [10, 20, 30, 50, 100].where((pts) => pts <= cart.selectedCustomer!.loyaltyPoints).map((pts) {
                     final isSel = cart.pointsToRedeem == pts.toDouble();
                     return ActionChip(
                       label: Text('$pts Pts', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 10, color: isSel ? Colors.white : AppColors.deepAmber)),
@@ -1595,7 +2153,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 icon: const Icon(Icons.payment_rounded, size: 16),
-                label: const Text('Checkout (F12)', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                label: const Text('Checkout', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
                 onPressed: _openCheckoutDialog,
               ),
             ],

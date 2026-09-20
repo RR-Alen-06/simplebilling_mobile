@@ -186,6 +186,27 @@ class CartNotifier extends StateNotifier<CartState> {
     state = state.copyWith(items: updatedList);
   }
 
+  void updateItem(int index, {String? productName, double? price, double? quantity}) {
+    if (index < 0 || index >= state.items.length) return;
+    final updatedList = List<BillItemModel>.from(state.items);
+    final it = updatedList[index];
+    final updatedName = productName ?? it.productName;
+    final updatedPrice = price ?? it.price;
+    final updatedQty = quantity ?? it.quantity;
+    if (updatedQty <= 0) {
+      removeItem(index);
+      return;
+    }
+    updatedList[index] = BillItemModel(
+      productId: it.productId,
+      productName: updatedName,
+      quantity: updatedQty,
+      price: updatedPrice,
+      total: double.parse((updatedQty * updatedPrice).toStringAsFixed(2)),
+    );
+    state = state.copyWith(items: updatedList);
+  }
+
   void removeItem(int index) {
     final updatedList = List<BillItemModel>.from(state.items)..removeAt(index);
     state = state.copyWith(items: updatedList);
