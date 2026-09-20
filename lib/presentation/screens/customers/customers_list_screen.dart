@@ -517,7 +517,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                                                   ),
                                                   Text(
                                                     cust.mobile != null && cust.mobile!.isNotEmpty
-                                                        ? '${cust.mobile!} ${cust.email != null ? "• " + cust.email! : ""}'
+                                                        ? '${cust.mobile!} ${cust.email != null ? "• ${cust.email!}" : ""}'
                                                         : (cust.email ?? 'No contact registered'),
                                                     style: const TextStyle(
                                                       color: AppColors.textSecondary,

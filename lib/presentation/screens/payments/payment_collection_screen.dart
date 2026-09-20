@@ -250,7 +250,7 @@ class _PaymentCollectionScreenState extends ConsumerState<PaymentCollectionScree
               final clearCustomers = customers.where((c) => c.balanceDue <= 0).toList();
 
               return DropdownButtonFormField<String>(
-                value: _selectedCustomer?.id,
+                initialValue: _selectedCustomer?.id,
                 decoration: InputDecoration(
                   hintText: 'Choose a customer...',
                   prefixIcon: const Icon(Icons.person_search_rounded, size: 20, color: AppColors.primary),
@@ -357,7 +357,7 @@ class _PaymentCollectionScreenState extends ConsumerState<PaymentCollectionScree
                   Expanded(
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        backgroundColor: AppColors.pastelSky.withOpacity(0.4),
+                        backgroundColor: AppColors.pastelSky.withValues(alpha: 0.4),
                         side: const BorderSide(color: AppColors.deepSky, width: 1.2),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
@@ -370,7 +370,7 @@ class _PaymentCollectionScreenState extends ConsumerState<PaymentCollectionScree
                   Expanded(
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        backgroundColor: AppColors.pastelLavender.withOpacity(0.4),
+                        backgroundColor: AppColors.pastelLavender.withValues(alpha: 0.4),
                         side: const BorderSide(color: AppColors.deepLavender, width: 1.2),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
@@ -420,7 +420,7 @@ class _PaymentCollectionScreenState extends ConsumerState<PaymentCollectionScree
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.pastelMint.withOpacity(0.5),
+              color: AppColors.pastelMint.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppColors.deepMint),
             ),
@@ -548,7 +548,7 @@ class _PaymentCollectionScreenState extends ConsumerState<PaymentCollectionScree
                             children: [
                               Row(
                                 children: [
-                                  Text(num, style: const TextStyle(fontWeight: FontWeight.w800, fontFamily: 'monospace', fontSize: 11.5, color: AppColors.deepLavender)),
+                                  Text(payNum, style: const TextStyle(fontWeight: FontWeight.w800, fontFamily: 'monospace', fontSize: 11.5, color: AppColors.deepLavender)),
                                   const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),

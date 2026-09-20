@@ -8,7 +8,6 @@ import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
 import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
 import 'package:simplebilling_mobile/core/utils/csv_exporter.dart';
-import 'package:simplebilling_mobile/data/models/bill_model.dart';
 import 'package:simplebilling_mobile/data/models/expense_model.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/sync_status_badge.dart';
@@ -49,7 +48,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchTerm = '';
   String _selectedCategory = 'All';
-  String _selectedPaymentMode = 'All';
+  final String _selectedPaymentMode = 'All';
   ExpenseDateRange _selectedRange = ExpenseDateRange.month;
   DateTimeRange? _customDateRange;
   bool _isChartViewDonut = true; // true = Donut Chart, false = Bar Chart
@@ -153,7 +152,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
+        builder: (modalCtx, setModalState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           title: Row(
             children: [
@@ -188,7 +187,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: category,
+                  initialValue: category,
                   decoration: const InputDecoration(
                     labelText: 'Expense Category *',
                     border: OutlineInputBorder(),
@@ -215,7 +214,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: paymentMode,
+                  initialValue: paymentMode,
                   decoration: const InputDecoration(
                     labelText: 'Payment Channel *',
                     border: OutlineInputBorder(),
@@ -279,13 +278,12 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   }, clientRef: clientRef);
                 }
 
-                if (mounted) {
-                  ref.invalidate(expensesListProvider);
-                  if (ctx.mounted) Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Expense of ₹${amount.toStringAsFixed(2)} logged! 💸')),
-                  );
-                }
+                ref.invalidate(expensesListProvider);
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Expense of ₹${amount.toStringAsFixed(2)} logged! 💸')),
+                );
               },
               child: const Text('Record Expense'),
             ),
@@ -301,7 +299,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
+        builder: (modalCtx, setModalState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           title: const Row(
             children: [
@@ -350,7 +348,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   child: ListView.separated(
                     shrinkWrap: true,
                     itemCount: _customCategories.length,
-                    separatorBuilder: (_, __) => const Divider(height: 10),
+                    separatorBuilder: (_, _) => const Divider(height: 10),
                     itemBuilder: (c, i) {
                       final cat = _customCategories[i];
                       return Row(
@@ -840,7 +838,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: entries.length > 4 ? 4 : entries.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 6),
+                    separatorBuilder: (_, _) => const SizedBox(height: 6),
                     itemBuilder: (c, i) {
                       return Row(
                         children: [
@@ -962,7 +960,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: paymentModeTotals.entries.length,
-              separatorBuilder: (_, __) => const Divider(height: 10),
+              separatorBuilder: (_, _) => const Divider(height: 10),
               itemBuilder: (c, i) {
                 final entry = paymentModeTotals.entries.elementAt(i);
                 final pct = totalExpenses > 0 ? ((entry.value / totalExpenses) * 100).toStringAsFixed(0) : '0';
@@ -1075,7 +1073,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: expenses.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (c, i) {
             final exp = expenses[i];
             final syncStatus = _getExpenseSyncStatus(exp.clientRef, exp.id, tasks);

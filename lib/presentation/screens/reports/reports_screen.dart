@@ -462,7 +462,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppColors.pastelLavender.withOpacity(0.4),
+                  color: AppColors.pastelLavender.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AppColors.deepLavender, width: 1),
                 ),
@@ -630,7 +630,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
             style: TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 9.5,
-              color: textColor.withOpacity(0.8),
+              color: textColor.withValues(alpha: 0.8),
             ),
           ),
         ],
@@ -699,7 +699,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppColors.pastelLavender.withOpacity(0.5),
+                              color: AppColors.pastelLavender.withValues(alpha: 0.5),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(b.paymentMethod, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
@@ -1124,7 +1124,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
                                       shop: shop,
                                       billing: billing,
                                     );
-                                    if (!context.mounted) return;
+                                    if (!mounted) return;
                                     if (sent) {
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(content: Text('WhatsApp reminder sent to ${cust.name}! 💬')),

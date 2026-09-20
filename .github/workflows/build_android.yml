@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master, main, 'feat/**', 'fix/**' ]
   pull_request:
     branches: [ master, main ]
   workflow_dispatch:
@@ -43,6 +43,9 @@ jobs:
             touch .env
             echo "Created empty .env."
           fi
+
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x android/gradlew
 
       - name: Install Dependencies
         run: flutter pub get

@@ -168,12 +168,11 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
                 ref.invalidate(customerSummariesProvider);
                 ref.read(cartProvider.notifier).selectCustomer(newCust);
               }
-              if (mounted) {
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Customer ${nameCtrl.text.trim()} registered & selected! 🎉')),
-                );
-              }
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Customer ${nameCtrl.text.trim()} registered & selected! 🎉')),
+              );
             },
             child: const Text('Save & Select', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
@@ -588,7 +587,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) {
+        builder: (modalCtx, setModalState) {
           final advanceUsed = cart.useAdvance ? cart.advanceUsed : 0.0;
           final cashVal = double.tryParse(_cashCtrl.text) ?? 0.0;
           final upiVal = double.tryParse(_upiCtrl.text) ?? 0.0;
@@ -1191,7 +1190,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
     final categories = ['All', 'Xerox', 'Print', 'Paper', 'Binding', 'Stationery', 'Other'];
     final filtered = products.where((p) {
       final matchesSearch = p.name.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesCategory = _selectedCategory == 'All' || (p.category ?? 'Other').toLowerCase() == _selectedCategory.toLowerCase();
+      final matchesCategory = _selectedCategory == 'All' || p.category.toLowerCase() == _selectedCategory.toLowerCase();
       return matchesSearch && matchesCategory;
     }).toList();
 
@@ -1264,7 +1263,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> with SingleTicker
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(p.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
-                          Text('Category: ${p.category ?? "General"}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                          Text('Category: ${p.category}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                         ],
                       ),
                     ),
