@@ -18,7 +18,7 @@ class CsvExporter {
       if (kIsWeb) {
         // On Web, launching a data URL triggers an immediate browser file download
         final uri = Uri.parse(
-          'data:text/csv;charset=utf-8,' + Uri.encodeComponent(csvContent),
+          'data:text/csv;charset=utf-8,${Uri.encodeComponent(csvContent)}',
         );
         if (await canLaunchUrl(uri)) {
           return await launchUrl(uri);
