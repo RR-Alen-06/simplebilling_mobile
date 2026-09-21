@@ -12,6 +12,7 @@ import 'package:simplebilling_mobile/data/models/customer_model.dart';
 import 'package:simplebilling_mobile/data/models/customer_ledger_model.dart';
 import 'package:simplebilling_mobile/data/models/dashboard_stats_model.dart';
 import 'package:simplebilling_mobile/data/models/expense_model.dart';
+import 'package:simplebilling_mobile/data/models/payment_model.dart';
 import 'package:simplebilling_mobile/data/models/product_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 
@@ -20,10 +21,10 @@ class ApiRepository {
   static SupabaseClient get client => _client;
 
   /// Global toggle for pure Mock / Demo Data mode during testing
-  static bool isMockMode = true;
+  static bool get isMockMode => SupabaseConfig.isMockMode;
 
   static void setMockMode(bool value) {
-    isMockMode = value;
+    SupabaseConfig.setMockMode(value);
   }
 
   // --- ATOMIC SEQUENCE GENERATOR (ALIGNED WITH POSTGRES RPC & WEB APP) ---
@@ -357,6 +358,31 @@ class ApiRepository {
     } catch (e) {
       debugPrint('Error recording customer payment: $e');
       return false;
+    }
+  }
+
+  // --- PAYMENTS LIST ---
+  static Future<List<PaymentModel>> getPayments() async {
+    if (isMockMode) {
+      return MockDatabase.instance.getPayments();
+    }
+
+    try {
+      final response = await _client
+          .from('payments')
+          .select('*, customer:customers(name, mobile)')
+          .order('created_at', ascending: false);
+      return (response as List).map((json) {
+        final cust = json['customer'] as Map<String, dynamic>?;
+        return PaymentModel.fromJson({
+          ...json,
+          'customer_name': cust?['name'],
+          'customer_mobile': cust?['mobile'],
+        });
+      }).toList();
+    } catch (e, stack) {
+      AppLogger.error('Error fetching payments', e, stack);
+      return [];
     }
   }
 

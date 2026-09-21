@@ -7,6 +7,7 @@ import '../models/expense_model.dart';
 import '../models/settings_model.dart';
 import '../models/dashboard_stats_model.dart';
 import '../models/audit_log_model.dart';
+import '../models/payment_model.dart';
 
 class MockDatabase {
   static final MockDatabase instance = MockDatabase._();
@@ -18,6 +19,7 @@ class MockDatabase {
   final List<CustomerModel> _customers = [];
   final List<BillModel> _bills = [];
   final List<ExpenseModel> _expenses = [];
+  final List<PaymentModel> _payments = [];
   final List<CustomerLedgerEntry> _ledgerEntries = [];
   final List<AuditLogModel> _auditLogs = [];
   final Map<String, int> _sequences = {
@@ -720,10 +722,15 @@ class MockDatabase {
     };
   }
 
+  List<PaymentModel> getPayments() {
+    return List.unmodifiable(_payments);
+  }
+
   bool purgeBusinessData() {
     _bills.clear();
     _expenses.clear();
     _ledgerEntries.clear();
+    _payments.clear();
     for (int i = 0; i < _customers.length; i++) {
       _customers[i] = _customers[i].copyWith(
         totalBilled: 0.0,
