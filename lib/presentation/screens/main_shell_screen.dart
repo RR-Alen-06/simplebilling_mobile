@@ -74,45 +74,75 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 // Brand Header
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryEmerald,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primaryEmerald.withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(Icons.point_of_sale, color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'SimpleBilling',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              Text(
+                                'POS & ERP Suite',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryEmerald,
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primaryEmerald.withValues(alpha: 0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                          color: AppColors.pastelMint,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppColors.borderMint),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.bolt, size: 13, color: AppColors.deepMint),
+                            SizedBox(width: 4),
+                            Text(
+                              'TEST / MOCK MODE (SAFE)',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.deepMint,
+                                letterSpacing: 0.2,
+                              ),
                             ),
                           ],
                         ),
-                        child: const Icon(Icons.point_of_sale, color: Colors.white, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'SimpleBilling',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textPrimary,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                          Text(
-                            'POS & ERP Suite',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),

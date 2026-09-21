@@ -326,6 +326,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
     );
   }
 
+  // --- Seed Sample Test Catalog Handler ---
+  Future<void> _handleSeedSampleData() async {
+    await ApiRepository.seedDefaultCatalogAndCustomers();
+    if (!mounted) return;
+    ref.invalidate(productsProvider);
+    ref.invalidate(customersProvider);
+    ref.invalidate(customerSummariesProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Test Catalog & Demo Customers populated successfully! 🚀')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(settingsProvider, (prev, next) {
@@ -1057,31 +1069,64 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
   Widget _buildBackupRestoreTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(14),
-      child: _buildSectionCard(
-        title: 'Portable Database Snapshot',
-        subtitle: 'Export and download complete database snapshot (settings, sequences, catalog, ledger, bills, and audit logs)',
-        icon: Icons.backup_rounded,
-        iconBg: AppColors.pastelLavender,
-        iconColor: AppColors.deepLavender,
+      child: Column(
         children: [
-          const Text(
-            'The Portable JSON Snapshot contains complete store records including Shop Settings, Billing Rules, Master Products, Customer Directory, Historical Invoices, Expenses, and Immutable Audit Trail Logs.',
-            style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+          _buildSectionCard(
+            title: 'Test Catalog & Sample Data (Demo Mode)',
+            subtitle: 'Populate demo Xerox/Print catalog and test customer accounts for offline or fresh testing',
+            icon: Icons.bolt_rounded,
+            iconBg: AppColors.pastelMint,
+            iconColor: AppColors.deepMint,
+            children: [
+              const Text(
+                'Need sample products and test customer accounts for quick billing tests? Click below to seed standard photocopy, print, lamination, and stationery items into your catalog.',
+                style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.deepMint,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: _handleSeedSampleData,
+                  icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                  label: const Text('Seed Test Catalog & Customers 🚀', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.deepLavender,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          _buildSectionCard(
+            title: 'Portable Database Snapshot',
+            subtitle: 'Export and download complete database snapshot (settings, sequences, catalog, ledger, bills, and audit logs)',
+            icon: Icons.backup_rounded,
+            iconBg: AppColors.pastelLavender,
+            iconColor: AppColors.deepLavender,
+            children: [
+              const Text(
+                'The Portable JSON Snapshot contains complete store records including Shop Settings, Billing Rules, Master Products, Customer Directory, Historical Invoices, Expenses, and Immutable Audit Trail Logs.',
+                style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
               ),
-              onPressed: _handleBackupExport,
-              icon: const Icon(Icons.download_rounded, size: 18),
-              label: const Text('Download Database Backup (JSON)', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
-            ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.deepLavender,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: _handleBackupExport,
+                  icon: const Icon(Icons.download_rounded, size: 18),
+                  label: const Text('Download Database Backup (JSON)', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
