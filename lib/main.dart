@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'core/constants/app_colors.dart';
+import 'core/constants/app_theme.dart';
 import 'core/network/realtime_sync_manager.dart';
 import 'core/network/supabase_client.dart';
 import 'core/network/sync_queue_manager.dart';
@@ -30,6 +30,7 @@ class SimpleBillingApp extends ConsumerStatefulWidget {
 
 class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
   User? _currentUser;
+  bool _isLocalAuth = false;
   bool _isGuestMode = false;
 
   @override
@@ -77,27 +78,37 @@ class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isAuthenticated = _currentUser != null || _isLocalAuth || _isGuestMode;
+
     return MaterialApp(
       title: 'PrintPro ERP & Billing',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
-          primary: AppColors.primary,
-          secondary: AppColors.secondary,
-          surface: AppColors.surface,
-        ),
-        scaffoldBackgroundColor: AppColors.background,
-        fontFamily: 'Roboto',
-      ),
-      home: (_currentUser != null || _isGuestMode)
-          ? MainShellScreen(onSignOut: () => setState(() {
-              _currentUser = null;
-              _isGuestMode = false;
-            }))
+      theme: AppTheme.lightTheme,
+      home: isAuthenticated
+          ? MainShellScreen(
+              onSignOut: () async {
+                try {
+                  await SupabaseConfig.client.auth.signOut();
+                } catch (_) {}
+                if (mounted) {
+                  setState(() {
+                    _currentUser = null;
+                    _isLocalAuth = false;
+                    _isGuestMode = false;
+                  });
+                }
+              },
+            )
           : LoginScreen(
-              onLoginSuccess: () => setState(() => _currentUser = SupabaseConfig.client.auth.currentUser),
+              onLoginSuccess: () {
+                final user = SupabaseConfig.client.auth.currentUser;
+                setState(() {
+                  _currentUser = user;
+                  if (user == null) {
+                    _isLocalAuth = true;
+                  }
+                });
+              },
               onGuestLogin: () => setState(() => _isGuestMode = true),
             ),
     );
