@@ -30,6 +30,7 @@ class SimpleBillingApp extends ConsumerStatefulWidget {
 
 class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
   User? _currentUser;
+  bool _isLocalAuth = false;
   bool _isGuestMode = false;
 
   @override
@@ -77,17 +78,37 @@ class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isAuthenticated = _currentUser != null || _isLocalAuth || _isGuestMode;
+
     return MaterialApp(
       title: 'PrintPro ERP & Billing',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: (_currentUser != null || _isGuestMode)
-          ? MainShellScreen(onSignOut: () => setState(() {
-              _currentUser = null;
-              _isGuestMode = false;
-            }))
+      home: isAuthenticated
+          ? MainShellScreen(
+              onSignOut: () async {
+                try {
+                  await SupabaseConfig.client.auth.signOut();
+                } catch (_) {}
+                if (mounted) {
+                  setState(() {
+                    _currentUser = null;
+                    _isLocalAuth = false;
+                    _isGuestMode = false;
+                  });
+                }
+              },
+            )
           : LoginScreen(
-              onLoginSuccess: () => setState(() => _currentUser = SupabaseConfig.client.auth.currentUser),
+              onLoginSuccess: () {
+                final user = SupabaseConfig.client.auth.currentUser;
+                setState(() {
+                  _currentUser = user;
+                  if (user == null) {
+                    _isLocalAuth = true;
+                  }
+                });
+              },
               onGuestLogin: () => setState(() => _isGuestMode = true),
             ),
     );
