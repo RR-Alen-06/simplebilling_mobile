@@ -191,14 +191,23 @@ class CartNotifier extends StateNotifier<CartState> {
 
   void selectCustomer(CustomerModel? customer) {
     if (customer == null) {
-      state = state.copyWith(clearCustomer: true, useAdvance: false, advanceUsed: 0.0);
+      state = state.copyWith(clearCustomer: true, useAdvance: false, advanceUsed: 0.0, pointsToRedeem: 0.0);
     } else {
       state = state.copyWith(
         selectedCustomer: customer,
         useAdvance: customer.advanceBalance > 0,
         advanceUsed: customer.advanceBalance > 0 ? customer.advanceBalance : 0.0,
+        pointsToRedeem: 0.0,
       );
     }
+  }
+
+  void setPointsToRedeem(double points) {
+    state = state.copyWith(pointsToRedeem: points < 0 ? 0.0 : points);
+  }
+
+  void clearPointsToRedeem() {
+    state = state.copyWith(pointsToRedeem: 0.0);
   }
 
   void setPercentageDiscount(double percent) {

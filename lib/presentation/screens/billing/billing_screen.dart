@@ -179,6 +179,225 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
     );
   }
 
+  void _showRedeemLoyaltyDialog(CustomerModel customer, LoyaltySettings settings, List<LoyaltyRedemptionRule> rules) {
+    final cart = ref.read(cartProvider);
+    final ptsCtrl = TextEditingController(
+      text: cart.pointsToRedeem > 0
+          ? (cart.pointsToRedeem % 1 == 0 ? cart.pointsToRedeem.toInt().toString() : cart.pointsToRedeem.toString())
+          : '',
+    );
+
+    double currentEnteredPoints = cart.pointsToRedeem;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final discountPreview = ApiRepository.calculateLoyaltyDiscount(
+            currentEnteredPoints,
+            settings,
+            rules,
+          );
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.stars_rounded, color: AppColors.primaryDark, size: 20),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Redeem Loyalty Points',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                      ),
+                      Text(
+                        'Customer: ${customer.name}',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Available Points Card
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Available Balance:',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                        ),
+                        Text(
+                          '${customer.loyaltyPoints.toInt()} pts',
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.primaryDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Conversion rules hint
+                  if (rules.isNotEmpty)
+                    Text(
+                      'Rules: ${rules.where((r) => r.enabled).map((r) => "${r.pointsRequired.toInt()} pts = ₹${r.discountAmount.toStringAsFixed(0)}").join(" • ")}',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    )
+                  else
+                    Text(
+                      'Rate: ${settings.pointsRequired.toInt()} pts = ₹${settings.discountValue.toStringAsFixed(0)} discount',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  const SizedBox(height: 10),
+
+                  // Numeric Points Input
+                  TextField(
+                    controller: ptsCtrl,
+                    autofocus: true,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Points to Redeem',
+                      hintText: 'e.g. 50',
+                      prefixIcon: Icon(Icons.stars_outlined, size: 18),
+                      suffixText: 'pts',
+                    ),
+                    onChanged: (val) {
+                      final p = double.tryParse(val.trim()) ?? 0.0;
+                      setModalState(() {
+                        currentEnteredPoints = p.clamp(0.0, customer.loyaltyPoints);
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Shortcut Chips: 25%, 50%, Max, Clear
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      ActionChip(
+                        label: const Text('25%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                        backgroundColor: AppColors.surfaceVariant,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          final p = (customer.loyaltyPoints * 0.25).floorToDouble();
+                          ptsCtrl.text = p.toInt().toString();
+                          setModalState(() => currentEnteredPoints = p);
+                        },
+                      ),
+                      ActionChip(
+                        label: const Text('50%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                        backgroundColor: AppColors.surfaceVariant,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          final p = (customer.loyaltyPoints * 0.50).floorToDouble();
+                          ptsCtrl.text = p.toInt().toString();
+                          setModalState(() => currentEnteredPoints = p);
+                        },
+                      ),
+                      ActionChip(
+                        label: const Text('Max', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                        backgroundColor: AppColors.primaryContainer,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          final p = customer.loyaltyPoints;
+                          ptsCtrl.text = p.toInt().toString();
+                          setModalState(() => currentEnteredPoints = p);
+                        },
+                      ),
+                      ActionChip(
+                        label: const Text('Clear', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.error)),
+                        backgroundColor: AppColors.surfaceVariant,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          ptsCtrl.clear();
+                          setModalState(() => currentEnteredPoints = 0.0);
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Live Discount Preview Banner
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: discountPreview > 0 ? AppColors.pastelMint : AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: discountPreview > 0 ? AppColors.borderMint : AppColors.border,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Discount Value:',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                        ),
+                        Text(
+                          discountPreview > 0 ? '-₹${discountPreview.toStringAsFixed(2)} OFF' : '₹0.00',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
+                            color: discountPreview > 0 ? AppColors.deepMint : AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryEmerald,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () {
+                  final entered = double.tryParse(ptsCtrl.text.trim()) ?? 0.0;
+                  final validPts = entered.clamp(0.0, customer.loyaltyPoints);
+                  ref.read(cartProvider.notifier).setPointsToRedeem(validPts);
+                  Navigator.of(ctx).pop();
+                },
+                child: const Text('Apply Discount'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _customNameCtrl.dispose();
@@ -588,6 +807,31 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                       const Icon(Icons.account_balance_wallet_outlined, size: 14, color: AppColors.deepMint),
                       const SizedBox(width: 6),
                       Text('₹${savedToAdvance.toStringAsFixed(2)} credited to advance wallet', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.deepMint)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
+
+              if (bill.loyaltyPointsEarned > 0 || bill.loyaltyPointsRedeemed > 0) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEDE9FE),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.stars_rounded, size: 15, color: Color(0xFF7C3AED)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${bill.loyaltyPointsRedeemed > 0 ? "Redeemed: ${bill.loyaltyPointsRedeemed.toInt()} pts  •  " : ""}'
+                          'Earned: +${bill.loyaltyPointsEarned.toInt()} pts',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6D28D9)),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1450,6 +1694,13 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
   // ==========================================
   Widget _buildStep2CustomerDiscounts(CartState cart, AsyncValue<List<CustomerModel>> customersAsync) {
     final customers = customersAsync.value ?? [];
+    final settings = ref.watch(settingsProvider).value ?? AllSettings(
+          shop: ShopSettings(),
+          billing: BillingSettings(),
+          loyalty: LoyaltySettings(),
+        );
+    final loyaltyRules = ref.watch(loyaltyRulesProvider).value ?? [];
+    final loyaltyDiscount = cart.calculateLoyaltyDiscount(settings.loyalty, loyaltyRules);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1488,11 +1739,6 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                               cart.selectedCustomer!.mobile ?? 'No phone recorded',
                               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                             ),
-                            if (cart.selectedCustomer!.balanceDue > 0)
-                              Text(
-                                'Pending Due: ${Formatters.currency(cart.selectedCustomer!.balanceDue)}',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.error),
-                              ),
                           ],
                         ),
                       ),
@@ -1502,6 +1748,136 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 10),
+                  // Badges: Pending Due, Loyalty Balance, Advance Wallet
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      if (cart.selectedCustomer!.balanceDue > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.5)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFDC2626)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Pending Due: ${Formatters.currency(cart.selectedCustomer!.balanceDue)}',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFDC2626)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEDE9FE),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.stars_rounded, size: 13, color: Color(0xFF7C3AED)),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Loyalty: ${cart.selectedCustomer!.loyaltyPoints.toInt()} pts',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF6D28D9)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (cart.selectedCustomer!.advanceBalance > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.pastelMint,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppColors.borderMint),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.account_balance_wallet_outlined, size: 13, color: AppColors.deepMint),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Advance: ${Formatters.currency(cart.selectedCustomer!.advanceBalance)}',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.deepMint),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (cart.selectedCustomer!.loyaltyPoints > 0 && settings.loyalty.enabled) ...[
+                    const SizedBox(height: 10),
+                    if (cart.pointsToRedeem > 0)
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.pastelMint,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.borderMint),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.stars_rounded, color: AppColors.deepMint, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Redeeming ${cart.pointsToRedeem.toInt()} pts (-₹${loyaltyDiscount.toStringAsFixed(2)})',
+                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: AppColors.deepMint),
+                                  ),
+                                  const Text(
+                                    'Loyalty discount applied to bill',
+                                    style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 6),
+                              ),
+                              onPressed: () => _showRedeemLoyaltyDialog(cart.selectedCustomer!, settings.loyalty, loyaltyRules),
+                              child: const Text('Edit', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 16, color: AppColors.textMuted),
+                              onPressed: () => ref.read(cartProvider.notifier).clearPointsToRedeem(),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF6D28D9),
+                            side: const BorderSide(color: Color(0xFFC4B5FD)),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.stars_rounded, size: 18),
+                          label: Text(
+                            'Redeem Loyalty Points (${cart.selectedCustomer!.loyaltyPoints.toInt()} Available)',
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                          ),
+                          onPressed: () => _showRedeemLoyaltyDialog(cart.selectedCustomer!, settings.loyalty, loyaltyRules),
+                        ),
+                      ),
+                  ],
                 ] else ...[
                   Row(
                     children: [
@@ -1811,6 +2187,66 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Customer Overview Banner in Step 3
+          if (cart.selectedCustomer != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.pastelMint,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.person, color: AppColors.deepMint, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          cart.selectedCustomer!.name,
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.textPrimary),
+                        ),
+                        Text(
+                          'Loyalty: ${cart.selectedCustomer!.loyaltyPoints.toInt()} pts${cart.pointsToRedeem > 0 ? " (${cart.pointsToRedeem.toInt()} redeemed)" : ""}',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF6D28D9), fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (cart.selectedCustomer!.balanceDue > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.5)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text('Pending Due', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFFDC2626))),
+                          Text(
+                            Formatters.currency(cart.selectedCustomer!.balanceDue),
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFDC2626)),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
           // Grand Total Summary Card
           Container(
             padding: const EdgeInsets.all(16),
@@ -1841,12 +2277,15 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                   style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900),
                 ),
                 const Divider(height: 16, color: Colors.white24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
                   children: [
                     Text('Subtotal: ${Formatters.currency(cart.subtotal)}', style: const TextStyle(color: Colors.white70, fontSize: 11)),
                     if (cart.manualDiscount > 0)
                       Text('Discount: -${Formatters.currency(cart.manualDiscount)}', style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 11, fontWeight: FontWeight.w700)),
+                    if (loyaltyDiscount > 0)
+                      Text('Loyalty: -${Formatters.currency(loyaltyDiscount)}', style: const TextStyle(color: Color(0xFFC4B5FD), fontSize: 11, fontWeight: FontWeight.w700)),
                     if (gstAmount > 0)
                       Text('GST: +${Formatters.currency(gstAmount)}', style: const TextStyle(color: Colors.white70, fontSize: 11)),
                   ],
