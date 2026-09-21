@@ -15,11 +15,6 @@ class RealtimeSyncManager {
     required VoidCallback onCustomersChanged,
     required VoidCallback onProductsChanged,
   }) {
-    if (SupabaseConfig.isMockMode) {
-      debugPrint('[RealtimeSyncManager] Sandbox mode active: Skipping live Supabase realtime channels.');
-      return;
-    }
-
     try {
       final client = SupabaseConfig.client;
 

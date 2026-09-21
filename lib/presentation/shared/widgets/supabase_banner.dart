@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
-import 'package:simplebilling_mobile/core/network/supabase_client.dart';
 import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
 import 'package:simplebilling_mobile/core/network/sync_task_model.dart';
 
@@ -9,8 +8,6 @@ class SupabaseBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasConfig = SupabaseConfig.supabaseUrl.isNotEmpty && SupabaseConfig.supabasePublishableKey.isNotEmpty;
-
     return ValueListenableBuilder<List<SyncTask>>(
       valueListenable: SyncQueueManager.instance.tasksNotifier,
       builder: (context, tasks, child) {
@@ -106,16 +103,16 @@ class SupabaseBanner extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  color: hasConfig ? AppColors.deepMint : AppColors.deepAmber,
+                  color: AppColors.deepMint,
                 ),
               ),
               const SizedBox(width: 8),
-              Expanded(
+              const Expanded(
                 child: Text(
-                  hasConfig ? 'Supabase Backend Connected • Real-time Sync Active' : 'Supabase Demo Mode • Local SQLite Storage Active',
-                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                  'Supabase Backend Connected • Real-time Sync Active',
+                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                 ),
               ),
               Container(

@@ -18,11 +18,9 @@ class SyncQueueManager {
 
   String get _currentQueueKey {
     String uid = 'guest';
-    if (!SupabaseConfig.isMockMode) {
-      try {
-        uid = SupabaseConfig.client.auth.currentUser?.id ?? 'guest';
-      } catch (_) {}
-    }
+    try {
+      uid = SupabaseConfig.client.auth.currentUser?.id ?? 'guest';
+    } catch (_) {}
     return 'printpro_sync_queue_$uid';
   }
 
