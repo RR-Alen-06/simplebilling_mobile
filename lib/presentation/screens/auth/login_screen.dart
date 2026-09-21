@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
 import 'package:simplebilling_mobile/core/constants/app_theme.dart';
 import 'package:simplebilling_mobile/core/network/supabase_client.dart';
@@ -44,6 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMsg = null;
     });
 
+    // Supabase Cloud Auth with auto-sign-up fallback
     try {
       final res = await SupabaseConfig.client.auth.signInWithPassword(
         email: email,
@@ -51,6 +53,8 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (res.user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('printpro_local_auth', res.user!.id);
         widget.onLoginSuccess();
         return;
       } else {
