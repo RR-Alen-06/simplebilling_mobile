@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
+import 'package:simplebilling_mobile/core/constants/app_theme.dart';
 import 'package:simplebilling_mobile/core/network/supabase_client.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailCtrl = TextEditingController();
   final TextEditingController _passwordCtrl = TextEditingController();
+  bool _obscurePassword = true;
   bool _isLoading = false;
   String? _errorMsg;
 
@@ -43,25 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMsg = null;
     });
 
-    // If Mock / Sandbox mode is active, authenticate locally without network calls
-    if (SupabaseConfig.isMockMode) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('printpro_local_auth', 'sandbox_user_session');
-      if (mounted) setState(() => _isLoading = false);
-      widget.onLoginSuccess();
-      return;
-    }
-
-    // 1. Check Built-in Master Admin Bypass
-    if ((email == 'admin@shop.com' || email == 'admin@simplebilling.com') &&
-        (password == 'admin123' || password == '123456')) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('printpro_local_auth', 'authenticated');
-      widget.onLoginSuccess();
-      return;
-    }
-
-    // 2. Supabase Cloud Auth with auto-sign-up fallback
+    // Supabase Cloud Auth with auto-sign-up fallback
     try {
       final res = await SupabaseConfig.client.auth.signInWithPassword(
         email: email,
@@ -73,31 +57,14 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('printpro_local_auth', res.user!.id);
         widget.onLoginSuccess();
         return;
+      } else {
+        setState(() => _errorMsg = 'Invalid credentials. Please verify your email and password.');
       }
     } catch (e) {
-      try {
-        final signUpRes = await SupabaseConfig.client.auth.signUp(
-          email: email,
-          password: password,
-        );
-        if (signUpRes.user != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('printpro_local_auth', signUpRes.user!.id);
-          widget.onLoginSuccess();
-          return;
-        }
-      } catch (_) {}
-
-      setState(() => _errorMsg = 'Authentication error: ${e.toString().replaceAll('Exception:', '')}');
+      setState(() => _errorMsg = 'Authentication failed: ${e.toString().replaceAll('Exception:', '')}');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  Future<void> _handleQuickDemoLogin() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('printpro_local_auth', 'demo_admin_session');
-    widget.onLoginSuccess();
   }
 
   @override
@@ -111,38 +78,56 @@ class _LoginScreenState extends State<LoginScreen> {
           if (isLargeScreen) {
             return Row(
               children: [
-                // Left Brand Panel
+                // Left Brand Presentation Panel
                 Expanded(
                   flex: 5,
                   child: Container(
-                    padding: const EdgeInsets.all(40),
+                    padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 40),
                     decoration: const BoxDecoration(
-                      color: AppColors.deepLavender,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF0F172A), // Slate 900
+                          Color(0xFF064E3B), // Deep Emerald
+                          Color(0xFF047857), // Emerald 700
+                        ],
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        // Brand Logo
                         Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: AppColors.primaryEmerald,
                                 borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primaryEmerald.withValues(alpha: 0.4),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                               ),
-                              child: const Icon(Icons.print_rounded, size: 28, color: AppColors.deepLavender),
+                              child: const Icon(Icons.point_of_sale, size: 26, color: Colors.white),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 14),
                             const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('SimpleBilling ERP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
-                                Text('Xerox, Print & Retail Edition', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                Text('SimpleBilling', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: -0.4)),
+                                Text('Modern POS & ERP Suite', style: TextStyle(color: Colors.white70, fontSize: 12)),
                               ],
                             ),
                           ],
                         ),
+
+                        // Main Feature Points
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -151,41 +136,52 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w900,
-                                fontSize: 28,
-                                height: 1.25,
+                                fontSize: 32,
+                                height: 1.2,
+                                letterSpacing: -0.5,
                               ),
                             ),
-                            const SizedBox(height: 16),
-                            _buildFeaturePill(Icons.speed_rounded, 'Real-time Sub-second POS Checkout Terminal'),
-                            _buildFeaturePill(Icons.receipt_long_rounded, 'Dynamic 80mm/58mm Thermal & A4 Tax Invoicing'),
-                            _buildFeaturePill(Icons.account_balance_wallet_rounded, 'Customer Credit Ledgers & Advance Drawdowns'),
-                            _buildFeaturePill(Icons.offline_bolt_rounded, 'Offline-First Local Sync Engine with Supabase Cloud'),
+                            const SizedBox(height: 24),
+                            _buildFeaturePill(Icons.flash_on_rounded, 'Sub-second POS Checkout & Multi-Step Wizard'),
+                            _buildFeaturePill(Icons.receipt_long_rounded, 'WhatsApp PDF Sharing & 80mm POS Thermal Printing'),
+                            _buildFeaturePill(Icons.account_balance_wallet_rounded, 'Live Customer Dues & Advance Wallet Tracking'),
+                            _buildFeaturePill(Icons.cloud_sync_rounded, 'Offline-First Realtime Synchronization Engine'),
                           ],
                         ),
+
+                        // System Version Tag
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
+                            color: Colors.white.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(color: Colors.white24),
                           ),
-                          child: const Text(
-                            'SimpleBilling Engine v2.4.0 • Enterprise Ready',
-                            style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.shield_outlined, color: Colors.white70, size: 14),
+                              SizedBox(width: 6),
+                              Text(
+                                'SimpleBilling v2.4.0 • Enterprise FinTech',
+                                style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-                // Right Authentication Form
+
+                // Right Authentication Form Area
                 Expanded(
                   flex: 5,
                   child: Center(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(32),
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 400),
+                        constraints: const BoxConstraints(maxWidth: 420),
                         child: _buildLoginForm(),
                       ),
                     ),
@@ -198,10 +194,57 @@ class _LoginScreenState extends State<LoginScreen> {
           // Mobile View
           return Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
-                child: _buildLoginForm(),
+                child: Column(
+                  children: [
+                    // Mobile Top Logo Header
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 24),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryEmerald,
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primaryEmerald.withValues(alpha: 0.35),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(Icons.point_of_sale, size: 36, color: Colors.white),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'SimpleBilling',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.textPrimary,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Next-Gen POS & Cloud Ledger',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    _buildLoginForm(),
+                  ],
+                ),
               ),
             ),
           );
@@ -212,22 +255,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildFeaturePill(IconData icon, String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(8),
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: Colors.white, size: 18),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+              style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -237,14 +280,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildLoginForm() {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.border, width: 2),
-        boxShadow: const [
-          BoxShadow(color: AppColors.shadowLight, offset: Offset(4, 4), blurRadius: 0),
-        ],
-      ),
+      decoration: AppTheme.tactileCardDecoration(elevated: true, borderRadius: 20),
       padding: const EdgeInsets.all(28),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -253,20 +289,19 @@ class _LoginScreenState extends State<LoginScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.pastelLavender,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.borderLavender, width: 1.5),
+                  color: AppColors.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.lock_rounded, size: 28, color: AppColors.deepLavender),
+                child: const Icon(Icons.admin_panel_settings_rounded, size: 24, color: AppColors.primaryDark),
               ),
               const SizedBox(width: 12),
               const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Admin Login', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppColors.textPrimary)),
-                  Text('Sign in to access POS billing terminal', style: TextStyle(color: AppColors.textSecondary, fontSize: 11.5)),
+                  Text('Merchant Sign In', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary)),
+                  Text('Access POS terminal & register', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                 ],
               ),
             ],
@@ -279,7 +314,7 @@ class _LoginScreenState extends State<LoginScreen> {
               decoration: BoxDecoration(
                 color: AppColors.pastelCoral,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.deepCoral),
+                border: Border.all(color: AppColors.borderCoral),
               ),
               child: Row(
                 children: [
@@ -301,37 +336,42 @@ class _LoginScreenState extends State<LoginScreen> {
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
-              labelText: 'Admin Email',
-              prefixIcon: const Icon(Icons.email_outlined, size: 18, color: AppColors.primary),
+              labelText: 'Email Address',
+              hintText: 'admin@shop.com',
+              prefixIcon: const Icon(Icons.email_outlined, size: 18, color: AppColors.primaryEmerald),
               filled: true,
-              fillColor: AppColors.background,
+              fillColor: AppColors.surfaceVariant,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           TextField(
             controller: _passwordCtrl,
-            obscureText: true,
+            obscureText: _obscurePassword,
             decoration: InputDecoration(
               labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline_rounded, size: 18, color: AppColors.primary),
+              prefixIcon: const Icon(Icons.lock_outline_rounded, size: 18, color: AppColors.primaryEmerald),
+              suffixIcon: IconButton(
+                icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20, color: AppColors.textSecondary),
+                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              ),
               filled: true,
-              fillColor: AppColors.background,
+              fillColor: AppColors.surfaceVariant,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
 
-          // Sign in button
+          // Primary Sign in Button
           SizedBox(
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.deepLavender,
+                backgroundColor: AppColors.primaryEmerald,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -339,27 +379,31 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: _isLoading ? null : _handleLogin,
               child: _isLoading
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Sign In to Account', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('Sign In to Terminal', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                        SizedBox(width: 6),
+                        Icon(Icons.arrow_forward_rounded, size: 18),
+                      ],
+                    ),
             ),
           ),
-          const SizedBox(height: 12),
 
-          // ⚡ Quick Demo Login Preset
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.deepMint,
-                backgroundColor: AppColors.pastelMint,
-                side: const BorderSide(color: AppColors.borderMint, width: 1.5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          if (widget.onGuestLogin != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              height: 40,
+              child: TextButton(
+                onPressed: widget.onGuestLogin,
+                child: const Text(
+                  'Continue as Guest (Offline Mode)',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                ),
               ),
-              icon: const Icon(Icons.bolt_rounded, size: 20, color: AppColors.deepMint),
-              label: const Text('⚡ Quick Demo Login (admin@shop.com)', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
-              onPressed: _handleQuickDemoLogin,
             ),
-          ),
+          ],
         ],
       ),
     );
