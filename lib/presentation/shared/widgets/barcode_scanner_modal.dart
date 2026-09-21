@@ -82,7 +82,7 @@ class _BarcodeScannerModalState extends State<BarcodeScannerModal>
     if (matchedProduct != null && widget.onProductScanned != null) {
       setState(() {
         _feedbackMessage =
-            'Found Product: ${matchedProduct.name} (Rs. ${matchedProduct.price})';
+            'Found Product: ${matchedProduct.name} (₹${matchedProduct.price.toStringAsFixed(2)})';
         _isSuccess = true;
       });
       widget.onProductScanned!(matchedProduct);

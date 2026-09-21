@@ -151,7 +151,7 @@ class EscPosGenerator {
     } else {
       appendLine('Thank you for your visit!');
     }
-    appendLine('Powered by SimpleBilling & PrintPro');
+    appendLine('Powered by SimpleBilling');
 
     // Feeds & Paper Cut
     bytes.addAll(lineFeed);
