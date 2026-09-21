@@ -1659,29 +1659,18 @@ class ApiRepository {
     }
 
     try {
-      // 1. Delete transactional data
-      await _client.from('bills').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await _client.from('payments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await _client.from('expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      // Execute atomic server-side PostgreSQL RPC function with role-based security
+      await _client.rpc('purge_business_data');
 
-      // 2. Reset customer transaction balances
-      await _client.from('customers').update({
-        'advance_balance': 0.0,
-        'loyalty_points': 0.0,
-      }).neq('id', '00000000-0000-0000-0000-000000000000');
-
-      // 3. Reset bill & payment sequence counters
-      await _client.from('sequences').update({'current_val': 1}).inFilter('key', ['BILL', 'PAYMENT', 'EXPENSE']);
-
-      // 4. Log immutable purge audit entry
+      // Log immutable purge audit entry
       await logAudit(
         action: 'PURGE_ALL_BUSINESS_DATA',
         entity: 'System Database',
-        newValue: 'Transactional records wiped by Super Admin authorization',
+        newValue: 'Transactional records wiped via server RPC authorization',
       );
       return true;
     } catch (e) {
-      debugPrint('Error purging business data: $e');
+      debugPrint('Error purging business data via RPC: $e');
       return false;
     }
   }
