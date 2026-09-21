@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
-import 'package:simplebilling_mobile/core/network/supabase_client.dart';
-import 'package:simplebilling_mobile/data/mock/mock_data_store.dart';
 import 'package:simplebilling_mobile/presentation/screens/dashboard/dashboard_screen.dart';
 import 'package:simplebilling_mobile/presentation/screens/billing/billing_screen.dart';
 import 'package:simplebilling_mobile/presentation/screens/bills/bills_list_screen.dart';
@@ -43,62 +41,259 @@ class _MainShellScreenState extends State<MainShellScreen> {
     ];
   }
 
-  Widget _buildSandboxBanner(BuildContext context) {
-    if (!SupabaseConfig.isMockMode) return const SizedBox.shrink();
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFEF3C7),
-        border: Border(bottom: BorderSide(color: Color(0xFFFDE68A), width: 1)),
-      ),
-      child: Row(
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isLargeScreen = constraints.maxWidth >= 768;
+
+        if (isLargeScreen) {
+          return _buildTabletDesktopLayout();
+        }
+
+        return _buildMobileAdaptiveLayout();
+      },
+    );
+  }
+
+  // --- Tablet / Desktop Modern Sidebar Rail Layout ---
+  Widget _buildTabletDesktopLayout() {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Row(
         children: [
-          const Icon(Icons.science_outlined, size: 18, color: Color(0xFFD97706)),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Text(
-              'TEST SANDBOX MODE • Live Web App DB Protected',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF92400E),
-                letterSpacing: 0.3,
-              ),
-              overflow: TextOverflow.ellipsis,
+          Container(
+            width: 240,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(right: BorderSide(color: AppColors.border, width: 1)),
             ),
-          ),
-          InkWell(
-            borderRadius: BorderRadius.circular(4),
-            onTap: () async {
-              await MockDataStore.instance.resetToDefaults();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Sandbox demo data reset to clean initial state.'),
-                    backgroundColor: AppColors.primary,
-                    duration: Duration(seconds: 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Brand Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryEmerald,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primaryEmerald.withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(Icons.point_of_sale, color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'SimpleBilling',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              Text(
+                                'POS & ERP Suite',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.pastelMint,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppColors.borderMint),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.bolt, size: 13, color: AppColors.deepMint),
+                            SizedBox(width: 4),
+                            Text(
+                              'TEST / MOCK MODE (SAFE)',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.deepMint,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                );
-                setState(() {});
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.refresh, size: 14, color: Color(0xFF92400E)),
-                  SizedBox(width: 4),
-                  Text(
-                    'Reset Data',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF92400E),
+                ),
+                const Divider(height: 1, color: AppColors.borderLight),
+                const SizedBox(height: 12),
+                
+                // Navigation Items List
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    children: [
+                      _buildSidebarItem(0, Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
+                      _buildSidebarItem(1, Icons.point_of_sale_outlined, Icons.point_of_sale, 'POS Billing'),
+                      _buildSidebarItem(2, Icons.receipt_long_outlined, Icons.receipt_long, 'Invoices & Bills'),
+                      _buildSidebarItem(3, Icons.payments_outlined, Icons.payments, 'Payments'),
+                      _buildSidebarItem(4, Icons.people_outline, Icons.people, 'Customers'),
+                      _buildSidebarItem(5, Icons.inventory_2_outlined, Icons.inventory_2, 'Products & Stock'),
+                      _buildSidebarItem(6, Icons.money_off_outlined, Icons.money_off, 'Shop Expenses'),
+                      _buildSidebarItem(7, Icons.bar_chart_outlined, Icons.bar_chart, 'Analytics & Reports'),
+                      _buildSidebarItem(8, Icons.security_outlined, Icons.security, 'Audit Trail'),
+                      _buildSidebarItem(9, Icons.settings_outlined, Icons.settings, 'Settings'),
+                    ],
+                  ),
+                ),
+
+                // Footer Merchant Quick Status
+                const Divider(height: 1, color: AppColors.borderLight),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: InkWell(
+                    onTap: widget.onSignOut,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.logout, color: AppColors.error, size: 18),
+                          SizedBox(width: 10),
+                          Text(
+                            'Sign Out',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.error,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ],
+                ),
+              ],
+            ),
+          ),
+          // Content View Area
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: _screens,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebarItem(int index, IconData unselectedIcon, IconData selectedIcon, String label) {
+    final isSelected = _currentIndex == index;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        color: isSelected ? AppColors.primaryContainer.withValues(alpha: 0.6) : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: ListTile(
+        dense: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        leading: Icon(
+          isSelected ? selectedIcon : unselectedIcon,
+          color: isSelected ? AppColors.primaryDark : AppColors.textSecondary,
+          size: 20,
+        ),
+        title: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? AppColors.primaryDark : AppColors.textPrimary,
+          ),
+        ),
+        onTap: () => setState(() => _currentIndex = index),
+      ),
+    );
+  }
+
+  // --- Mobile Adaptive Layout with Floating Action Dock ---
+  Widget _buildMobileAdaptiveLayout() {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 74),
+              child: IndexedStack(
+                index: _currentIndex,
+                children: _screens,
+              ),
+            ),
+          ),
+          
+          // Tactile Floating Bottom Navigation Dock
+          Positioned(
+            left: 14,
+            right: 14,
+            bottom: 12,
+            child: SafeArea(
+              top: false,
+              child: Container(
+                height: 64,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: AppColors.border, width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.textPrimary.withValues(alpha: 0.08),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                      spreadRadius: -2,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildDockTab(0, Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
+                    _buildDockTab(2, Icons.receipt_long_outlined, Icons.receipt_long, 'Bills'),
+                    
+                    // Elevated Center POS Quick Trigger
+                    _buildCenterPosTrigger(),
+
+                    _buildDockTab(3, Icons.payments_outlined, Icons.payments, 'Payments'),
+                    _buildDockMoreTrigger(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -107,134 +302,118 @@ class _MainShellScreenState extends State<MainShellScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isLargeScreen = constraints.maxWidth >= 720;
-
-        if (isLargeScreen) {
-          return Scaffold(
-            body: Column(
-              children: [
-                _buildSandboxBanner(context),
-                Expanded(
-                  child: Row(
-                    children: [
-                      SingleChildScrollView(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                          child: IntrinsicHeight(
-                            child: NavigationRail(
-                              selectedIndex: _currentIndex,
-                              onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
-                              labelType: NavigationRailLabelType.all,
-                              indicatorColor: AppColors.pastelLavender,
-                              backgroundColor: Colors.white,
-                              selectedIconTheme: const IconThemeData(color: AppColors.deepLavender, size: 26),
-                              unselectedIconTheme: const IconThemeData(color: AppColors.textSecondary, size: 22),
-                              selectedLabelTextStyle: const TextStyle(
-                                color: AppColors.deepLavender,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 12,
-                              ),
-                              unselectedLabelTextStyle: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 11,
-                              ),
-                              destinations: const [
-                                NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: Text('Dashboard')),
-                                NavigationRailDestination(icon: Icon(Icons.point_of_sale_outlined), selectedIcon: Icon(Icons.point_of_sale), label: Text('Billing')),
-                                NavigationRailDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: Text('Bills')),
-                                NavigationRailDestination(icon: Icon(Icons.payments_outlined), selectedIcon: Icon(Icons.payments), label: Text('Payments')),
-                                NavigationRailDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: Text('Customers')),
-                                NavigationRailDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: Text('Products')),
-                                NavigationRailDestination(icon: Icon(Icons.money_off_outlined), selectedIcon: Icon(Icons.money_off), label: Text('Expenses')),
-                                NavigationRailDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: Text('Reports')),
-                                NavigationRailDestination(icon: Icon(Icons.security_outlined), selectedIcon: Icon(Icons.security), label: Text('Audit')),
-                                NavigationRailDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: Text('Settings')),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const VerticalDivider(thickness: 1, width: 1, color: AppColors.border),
-                      Expanded(
-                        child: IndexedStack(
-                          index: _currentIndex,
-                          children: _screens,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // Mobile Bottom Navigation Bar with crisp colorful theme
-        return Scaffold(
-          body: Column(
-            children: [
-              _buildSandboxBanner(context),
-              Expanded(
-                child: IndexedStack(
-                  index: _currentIndex,
-                  children: _screens,
-                ),
+  Widget _buildDockTab(int index, IconData unselectedIcon, IconData selectedIcon, String label) {
+    final isSelected = _currentIndex == index;
+    return InkWell(
+      onTap: () => setState(() => _currentIndex = index),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primaryContainer : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
               ),
+              child: Icon(
+                isSelected ? selectedIcon : unselectedIcon,
+                color: isSelected ? AppColors.primaryDark : AppColors.textSecondary,
+                size: 20,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? AppColors.primaryDark : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCenterPosTrigger() {
+    final isPosSelected = _currentIndex == 1;
+    return GestureDetector(
+      onTap: () => setState(() => _currentIndex = 1),
+      child: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          color: AppColors.primaryEmerald,
+          shape: BoxShape.circle,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF10B981),
+              Color(0xFF059669),
             ],
           ),
-          bottomNavigationBar: Container(
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: AppColors.border, width: 1.5)),
-            ),
-            child: NavigationBar(
-              selectedIndex: _currentIndex < 5 ? _currentIndex : 4,
-              indicatorColor: AppColors.pastelLavender,
-              surfaceTintColor: Colors.transparent,
-              onDestinationSelected: (idx) {
-                if (idx == 4) {
-                  _showMoreOptionsSheet(context);
-                } else {
-                  setState(() => _currentIndex = idx);
-                }
-              },
-              backgroundColor: Colors.white,
-              elevation: 0,
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.dashboard_outlined),
-                  selectedIcon: Icon(Icons.dashboard, color: AppColors.deepLavender),
-                  label: 'Dashboard',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.point_of_sale_outlined),
-                  selectedIcon: Icon(Icons.point_of_sale, color: AppColors.deepLavender),
-                  label: 'POS',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.receipt_long_outlined),
-                  selectedIcon: Icon(Icons.receipt_long, color: AppColors.deepLavender),
-                  label: 'Bills',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.payments_outlined),
-                  selectedIcon: Icon(Icons.payments, color: AppColors.deepLavender),
-                  label: 'Payments',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.grid_view_outlined),
-                  selectedIcon: Icon(Icons.grid_view_rounded, color: AppColors.deepLavender),
-                  label: 'More',
-                ),
-              ],
-            ),
+          border: Border.all(
+            color: isPosSelected ? Colors.white : Colors.white.withValues(alpha: 0.6),
+            width: isPosSelected ? 2.5 : 1.5,
           ),
-        );
-      },
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryEmerald.withValues(alpha: 0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.point_of_sale,
+          color: Colors.white,
+          size: 26,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDockMoreTrigger() {
+    final isMoreSelected = _currentIndex > 3;
+    return InkWell(
+      onTap: () => _showMoreOptionsSheet(context),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+              decoration: BoxDecoration(
+                color: isMoreSelected ? AppColors.primaryContainer : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.grid_view_rounded,
+                color: isMoreSelected ? AppColors.primaryDark : AppColors.textSecondary,
+                size: 20,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'More',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: isMoreSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isMoreSelected ? AppColors.primaryDark : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -254,7 +433,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
             children: [
               Center(
                 child: Container(
-                  width: 40,
+                  width: 36,
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
@@ -264,10 +443,19 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 ),
               ),
               const Padding(
-                padding: EdgeInsets.only(left: 8, bottom: 12),
-                child: Text(
-                  'More Operations',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                padding: EdgeInsets.only(left: 8, bottom: 14),
+                child: Row(
+                  children: [
+                    Text(
+                      'All Operations',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                    ),
+                    Spacer(),
+                    Text(
+                      'Shortcuts',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+                    ),
+                  ],
                 ),
               ),
               _buildMoreTile(
@@ -281,8 +469,8 @@ class _MainShellScreenState extends State<MainShellScreen> {
               ),
               _buildMoreTile(
                 ctx,
-                title: 'Products & Catalog',
-                subtitle: 'Manage stock and item prices',
+                title: 'Products & Inventory',
+                subtitle: 'Manage stock, SKU catalog and prices',
                 icon: Icons.inventory_2_outlined,
                 bgColor: AppColors.pastelSky,
                 iconColor: AppColors.deepSky,
@@ -291,7 +479,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
               _buildMoreTile(
                 ctx,
                 title: 'Shop Expenses',
-                subtitle: 'Log operational costs and bills',
+                subtitle: 'Log operational expenses and vendor costs',
                 icon: Icons.money_off_outlined,
                 bgColor: AppColors.pastelCoral,
                 iconColor: AppColors.deepCoral,
@@ -300,7 +488,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
               _buildMoreTile(
                 ctx,
                 title: 'Reports & Analytics',
-                subtitle: 'Daily sales, monthly profit & dues',
+                subtitle: 'Daily summary, revenue breakdown & export',
                 icon: Icons.bar_chart_outlined,
                 bgColor: AppColors.pastelLavender,
                 iconColor: AppColors.deepLavender,
@@ -309,7 +497,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
               _buildMoreTile(
                 ctx,
                 title: 'Audit Trail & Logs',
-                subtitle: 'Security & mutation history',
+                subtitle: 'Security history and cloud sync status',
                 icon: Icons.security_outlined,
                 bgColor: AppColors.pastelSky,
                 iconColor: AppColors.deepSky,
@@ -318,7 +506,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
               _buildMoreTile(
                 ctx,
                 title: 'Settings & Profile',
-                subtitle: 'Store GSTIN, phone & session',
+                subtitle: 'Store GSTIN, printing options and logout',
                 icon: Icons.settings_outlined,
                 bgColor: AppColors.pastelAmber,
                 iconColor: AppColors.deepAmber,
@@ -343,23 +531,24 @@ class _MainShellScreenState extends State<MainShellScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.border, width: 1),
       ),
       child: ListTile(
+        dense: true,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         leading: Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(7),
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(9),
           ),
-          child: Icon(icon, color: iconColor, size: 22),
+          child: Icon(icon, color: iconColor, size: 20),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textPrimary)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 18),
         onTap: () {
           Navigator.pop(ctx);
           setState(() => _currentIndex = index);

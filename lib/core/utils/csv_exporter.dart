@@ -37,8 +37,8 @@ class CsvExporter {
     }
   }
 
-  /// Generate and download CSV for Bills list
-  static Future<bool> exportBills(List<BillModel> bills, {String filename = 'sales_bills_report.csv'}) async {
+  /// Generate CSV string for Bills list
+  static String generateBillsCsv(List<BillModel> bills) {
     final buffer = StringBuffer();
     // CSV Header
     buffer.writeln('Invoice Number,Date,Customer Name,Customer Phone,Payment Method,Subtotal,Discount,GST Amount,Grand Total,Cash Paid,UPI Paid');
@@ -59,11 +59,16 @@ class CsvExporter {
       buffer.writeln('$inv,$date,$name,$phone,$method,$subtotal,$discount,$gst,$grand,$cash,$upi');
     }
 
-    return await downloadCsv(filename: filename, csvContent: buffer.toString());
+    return buffer.toString();
   }
 
-  /// Generate and download CSV for Customer Ledger / Dues report
-  static Future<bool> exportCustomerDues(List<CustomerModel> customers, {String filename = 'customer_dues_ledger.csv'}) async {
+  /// Generate and download CSV for Bills list
+  static Future<bool> exportBills(List<BillModel> bills, {String filename = 'sales_bills_report.csv'}) async {
+    return await downloadCsv(filename: filename, csvContent: generateBillsCsv(bills));
+  }
+
+  /// Generate CSV string for Customer Ledger / Dues report
+  static String generateCustomerDuesCsv(List<CustomerModel> customers) {
     final buffer = StringBuffer();
     buffer.writeln('Customer Code,Customer Name,Mobile Phone,Email,Total Invoiced,Total Paid,Advance Balance,Balance Due,Loyalty Points');
 
@@ -81,11 +86,16 @@ class CsvExporter {
       buffer.writeln('$code,$name,$mobile,$email,$billed,$paid,$advance,$due,$pts');
     }
 
-    return await downloadCsv(filename: filename, csvContent: buffer.toString());
+    return buffer.toString();
   }
 
-  /// Generate and download CSV for Expenses report
-  static Future<bool> exportExpenses(List<ExpenseModel> expenses, {String filename = 'expenses_report.csv'}) async {
+  /// Generate and download CSV for Customer Ledger / Dues report
+  static Future<bool> exportCustomerDues(List<CustomerModel> customers, {String filename = 'customer_dues_ledger.csv'}) async {
+    return await downloadCsv(filename: filename, csvContent: generateCustomerDuesCsv(customers));
+  }
+
+  /// Generate CSV string for Expenses report
+  static String generateExpensesCsv(List<ExpenseModel> expenses) {
     final buffer = StringBuffer();
     buffer.writeln('Expense Number,Date Time,Description,Category,Payment Mode,Notes,Amount (INR)');
 
@@ -101,11 +111,16 @@ class CsvExporter {
       buffer.writeln('$num,$date,$desc,$cat,$mode,$notes,$amt');
     }
 
-    return await downloadCsv(filename: filename, csvContent: buffer.toString());
+    return buffer.toString();
   }
 
-  /// Generate and download CSV for Product / Item sales breakdown
-  static Future<bool> exportItemSales(List<Map<String, dynamic>> items, {String filename = 'item_sales_report.csv'}) async {
+  /// Generate and download CSV for Expenses report
+  static Future<bool> exportExpenses(List<ExpenseModel> expenses, {String filename = 'expenses_report.csv'}) async {
+    return await downloadCsv(filename: filename, csvContent: generateExpensesCsv(expenses));
+  }
+
+  /// Generate CSV string for Product / Item sales breakdown
+  static String generateItemSalesCsv(List<Map<String, dynamic>> items) {
     final buffer = StringBuffer();
     buffer.writeln('Product / Item Name,Total Quantity Sold,Revenue Generated (INR),Revenue Share (%)');
 
@@ -118,14 +133,23 @@ class CsvExporter {
       buffer.writeln('$name,$qty,$rev,$share');
     }
 
-    return await downloadCsv(filename: filename, csvContent: buffer.toString());
+    return buffer.toString();
+  }
+
+  /// Generate and download CSV for Product / Item sales breakdown
+  static Future<bool> exportItemSales(List<Map<String, dynamic>> items, {String filename = 'item_sales_report.csv'}) async {
+    return await downloadCsv(filename: filename, csvContent: generateItemSalesCsv(items));
   }
 
   static String _escape(String field) {
-    if (field.contains(',') || field.contains('"') || field.contains('\n')) {
-      return '"${field.replaceAll('"', '""')}"';
+    var sanitized = field;
+    if (sanitized.isNotEmpty && ('=+-@\t\r'.contains(sanitized[0]))) {
+      sanitized = "'$sanitized";
     }
-    return field;
+    if (sanitized.contains(',') || sanitized.contains('"') || sanitized.contains('\n')) {
+      return '"${sanitized.replaceAll('"', '""')}"';
+    }
+    return sanitized;
   }
 }
 
