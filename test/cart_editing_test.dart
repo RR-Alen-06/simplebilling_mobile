@@ -80,4 +80,55 @@ void main() {
       expect(cartNotifier.state.subtotal, 265.0);
     });
   });
+
+  group('Simultaneous Percentage & Flat Discount Tests', () {
+    late CartNotifier cartNotifier;
+
+    setUp(() {
+      cartNotifier = CartNotifier();
+      // Add items with subtotal = 1000
+      cartNotifier.addItem('Bulk Xerox', 2.0, 500); // subtotal = 1000
+    });
+
+    test('Percentage discount only', () {
+      cartNotifier.setPercentageDiscount(10.0); // 10% of 1000 = 100
+      expect(cartNotifier.state.percentageDiscount, 10.0);
+      expect(cartNotifier.state.percentDiscountAmount, 100.0);
+      expect(cartNotifier.state.flatDiscount, 0.0);
+      expect(cartNotifier.state.manualDiscount, 100.0);
+    });
+
+    test('Flat discount only', () {
+      cartNotifier.setFlatDiscount(50.0); // 50 flat
+      expect(cartNotifier.state.percentageDiscount, 0.0);
+      expect(cartNotifier.state.percentDiscountAmount, 0.0);
+      expect(cartNotifier.state.flatDiscount, 50.0);
+      expect(cartNotifier.state.manualDiscount, 50.0);
+    });
+
+    test('Simultaneous Percentage + Flat discount (Independent Sum)', () {
+      cartNotifier.setPercentageDiscount(10.0); // 100.0
+      cartNotifier.setFlatDiscount(50.0);       // 50.0
+      expect(cartNotifier.state.percentDiscountAmount, 100.0);
+      expect(cartNotifier.state.flatDiscount, 50.0);
+      expect(cartNotifier.state.manualDiscount, 150.0);
+    });
+
+    test('Discount clamped to subtotal when exceeding 100%', () {
+      cartNotifier.setPercentageDiscount(80.0); // 800.0
+      cartNotifier.setFlatDiscount(500.0);      // 500.0 -> total 1300 > 1000
+      expect(cartNotifier.state.manualDiscount, 1000.0); // clamped to subtotal
+    });
+
+    test('Clear discounts resets both percentage and flat discounts', () {
+      cartNotifier.setPercentageDiscount(15.0);
+      cartNotifier.setFlatDiscount(75.0);
+      expect(cartNotifier.state.manualDiscount, 225.0);
+
+      cartNotifier.clearDiscounts();
+      expect(cartNotifier.state.percentageDiscount, 0.0);
+      expect(cartNotifier.state.flatDiscount, 0.0);
+      expect(cartNotifier.state.manualDiscount, 0.0);
+    });
+  });
 }

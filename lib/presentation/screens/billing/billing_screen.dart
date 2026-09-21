@@ -1,4 +1,3 @@
-import 'package:collection/collection.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,7 +39,8 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
   // Payment & Discount controllers
   final TextEditingController _cashCtrl = TextEditingController();
   final TextEditingController _upiCtrl = TextEditingController();
-  final TextEditingController _discountCtrl = TextEditingController();
+  final TextEditingController _percentDiscountCtrl = TextEditingController();
+  final TextEditingController _flatDiscountCtrl = TextEditingController();
   String _selectedPaymentMode = 'Cash'; // Cash, UPI, Card, Credit, Split
 
   bool _isProcessing = false;
@@ -187,7 +187,8 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
     _searchCtrl.dispose();
     _cashCtrl.dispose();
     _upiCtrl.dispose();
-    _discountCtrl.dispose();
+    _percentDiscountCtrl.dispose();
+    _flatDiscountCtrl.dispose();
     super.dispose();
   }
 
@@ -478,7 +479,8 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
       ref.read(cartProvider.notifier).reset();
       _cashCtrl.clear();
       _upiCtrl.clear();
-      _discountCtrl.clear();
+      _percentDiscountCtrl.clear();
+      _flatDiscountCtrl.clear();
       setState(() => _currentStep = 0);
     }
   }
@@ -917,7 +919,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                       itemBuilder: (ctx, itemIdx) {
                         final item = cart.items[itemIdx];
                         final origProd = item.productId != null
-                            ? products.firstWhereOrNull((p) => p.id == item.productId)
+                            ? products.where((p) => p.id == item.productId).firstOrNull
                             : null;
                         final isCustomPrice = origProd != null && (origProd.price - item.price).abs() > 0.001;
                         final qtyDisplay = item.quantity % 1 == 0
@@ -1549,7 +1551,27 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
           const SizedBox(height: 20),
 
           // Discounts Section
-          const Text('Discount & Pricing Adjustments', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Discount & Pricing Adjustments', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+              if (cart.percentageDiscount > 0 || cart.flatDiscount > 0)
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: AppColors.error,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                  ),
+                  icon: const Icon(Icons.clear, size: 14),
+                  label: const Text('Clear All', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                  onPressed: () {
+                    _percentDiscountCtrl.clear();
+                    _flatDiscountCtrl.clear();
+                    ref.read(cartProvider.notifier).clearDiscounts();
+                  },
+                ),
+            ],
+          ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(14),
@@ -1557,36 +1579,160 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 1. Percentage Discount Field
                 Row(
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _discountCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Flat Discount (₹)',
-                          hintText: '0.00',
-                          prefixIcon: Icon(Icons.discount_outlined, size: 18),
+                    const Icon(Icons.percent_rounded, size: 18, color: AppColors.primaryEmerald),
+                    const SizedBox(width: 8),
+                    const Text('Percentage Discount (%)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    const Spacer(),
+                    if (cart.percentageDiscount > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryContainer,
+                          borderRadius: BorderRadius.circular(6),
                         ),
-                        onChanged: (val) {
-                          final d = double.tryParse(val) ?? 0.0;
-                          ref.read(cartProvider.notifier).setManualDiscount(d);
-                        },
+                        child: Text(
+                          '= -${Formatters.currency(cart.percentDiscountAmount)}',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primaryDark),
+                        ),
                       ),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _percentDiscountCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. 10 (for 10% off)',
+                    prefixIcon: const Icon(Icons.discount_outlined, size: 18),
+                    suffixText: '%',
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    suffixIcon: _percentDiscountCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () {
+                              _percentDiscountCtrl.clear();
+                              ref.read(cartProvider.notifier).setPercentageDiscount(0.0);
+                            },
+                          )
+                        : null,
+                  ),
+                  onChanged: (val) {
+                    final p = double.tryParse(val) ?? 0.0;
+                    ref.read(cartProvider.notifier).setPercentageDiscount(p);
+                  },
+                ),
+                const SizedBox(height: 6),
                 Wrap(
-                  spacing: 8,
+                  spacing: 6,
                   children: [
-                    _buildDiscountChip('₹0', 0),
-                    _buildDiscountChip('5%', cart.subtotal * 0.05),
-                    _buildDiscountChip('10%', cart.subtotal * 0.10),
-                    _buildDiscountChip('₹50', 50),
-                    _buildDiscountChip('₹100', 100),
+                    _buildPercentChip('0%', 0),
+                    _buildPercentChip('5%', 5),
+                    _buildPercentChip('10%', 10),
+                    _buildPercentChip('15%', 15),
+                    _buildPercentChip('20%', 20),
                   ],
                 ),
+
+                const Divider(height: 24),
+
+                // 2. Flat Discount Field
+                Row(
+                  children: [
+                    const Icon(Icons.currency_rupee, size: 18, color: AppColors.primaryEmerald),
+                    const SizedBox(width: 8),
+                    const Text('Flat Discount (₹)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    const Spacer(),
+                    if (cart.flatDiscount > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryContainer,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '= -${Formatters.currency(cart.flatDiscount)}',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primaryDark),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _flatDiscountCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    hintText: '0.00',
+                    prefixIcon: const Icon(Icons.money_off_csred_outlined, size: 18),
+                    prefixText: '₹ ',
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    suffixIcon: _flatDiscountCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            onPressed: () {
+                              _flatDiscountCtrl.clear();
+                              ref.read(cartProvider.notifier).setFlatDiscount(0.0);
+                            },
+                          )
+                        : null,
+                  ),
+                  onChanged: (val) {
+                    final d = double.tryParse(val) ?? 0.0;
+                    ref.read(cartProvider.notifier).setFlatDiscount(d);
+                  },
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    _buildFlatChip('₹0', 0),
+                    _buildFlatChip('₹20', 20),
+                    _buildFlatChip('₹50', 50),
+                    _buildFlatChip('₹100', 100),
+                    _buildFlatChip('₹200', 200),
+                  ],
+                ),
+
+                if (cart.manualDiscount > 0) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.pastelMint,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.borderMint),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle_outline, color: AppColors.deepMint, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Total Discount Applied: ${Formatters.currency(cart.manualDiscount)}',
+                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: AppColors.deepMint),
+                              ),
+                              Text(
+                                '${cart.percentageDiscount > 0 ? "${cart.percentageDiscount.toStringAsFixed(0)}% (${Formatters.currency(cart.percentDiscountAmount)})" : ""}'
+                                '${cart.percentageDiscount > 0 && cart.flatDiscount > 0 ? " + " : ""}'
+                                '${cart.flatDiscount > 0 ? "${Formatters.currency(cart.flatDiscount)} flat" : ""}',
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          'Net: ${Formatters.currency((cart.subtotal - cart.manualDiscount).clamp(0.0, double.infinity))}',
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.textPrimary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1614,13 +1760,26 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
     );
   }
 
-  Widget _buildDiscountChip(String label, double amount) {
+  Widget _buildPercentChip(String label, double percent) {
     return ActionChip(
       label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
       backgroundColor: AppColors.surfaceVariant,
+      visualDensity: VisualDensity.compact,
       onPressed: () {
-        _discountCtrl.text = amount > 0 ? amount.toStringAsFixed(2) : '';
-        ref.read(cartProvider.notifier).setManualDiscount(amount);
+        _percentDiscountCtrl.text = percent > 0 ? (percent % 1 == 0 ? percent.toInt().toString() : percent.toString()) : '';
+        ref.read(cartProvider.notifier).setPercentageDiscount(percent);
+      },
+    );
+  }
+
+  Widget _buildFlatChip(String label, double amount) {
+    return ActionChip(
+      label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+      backgroundColor: AppColors.surfaceVariant,
+      visualDensity: VisualDensity.compact,
+      onPressed: () {
+        _flatDiscountCtrl.text = amount > 0 ? (amount % 1 == 0 ? amount.toInt().toString() : amount.toStringAsFixed(2)) : '';
+        ref.read(cartProvider.notifier).setFlatDiscount(amount);
       },
     );
   }

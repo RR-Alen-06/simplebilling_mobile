@@ -43,8 +43,8 @@ final billsListProvider = FutureProvider<List<BillModel>>((ref) async {
 class CartState {
   final List<BillItemModel> items;
   final CustomerModel? selectedCustomer;
-  final String discountType; // 'FLAT' or 'PERCENTAGE'
-  final double discountValue;
+  final double percentageDiscount; // Percentage value, e.g. 10 for 10%
+  final double flatDiscount;       // Flat amount in rupees, e.g. 50
   final RoundingMethod roundingMethod;
   final double cashPaid;
   final double upiPaid;
@@ -56,8 +56,8 @@ class CartState {
   CartState({
     this.items = const [],
     this.selectedCustomer,
-    this.discountType = 'FLAT',
-    this.discountValue = 0.0,
+    this.percentageDiscount = 0.0,
+    this.flatDiscount = 0.0,
     this.roundingMethod = RoundingMethod.none,
     this.cashPaid = 0.0,
     this.upiPaid = 0.0,
@@ -69,11 +69,14 @@ class CartState {
 
   double get subtotal => items.fold(0.0, (sum, it) => sum + it.total);
 
+  double get percentDiscountAmount {
+    if (percentageDiscount <= 0 || subtotal <= 0) return 0.0;
+    return double.parse(((subtotal * percentageDiscount) / 100).toStringAsFixed(2));
+  }
+
   double get manualDiscount {
-    if (discountType == 'PERCENTAGE') {
-      return double.parse(((subtotal * discountValue) / 100).toStringAsFixed(2));
-    }
-    return discountValue;
+    final combined = percentDiscountAmount + flatDiscount;
+    return combined.clamp(0.0, subtotal);
   }
 
   double calculateLoyaltyDiscount(LoyaltySettings settings, List<LoyaltyRedemptionRule> rules) {
@@ -95,8 +98,8 @@ class CartState {
     List<BillItemModel>? items,
     CustomerModel? selectedCustomer,
     bool clearCustomer = false,
-    String? discountType,
-    double? discountValue,
+    double? percentageDiscount,
+    double? flatDiscount,
     RoundingMethod? roundingMethod,
     double? cashPaid,
     double? upiPaid,
@@ -108,8 +111,8 @@ class CartState {
     return CartState(
       items: items ?? this.items,
       selectedCustomer: clearCustomer ? null : (selectedCustomer ?? this.selectedCustomer),
-      discountType: discountType ?? this.discountType,
-      discountValue: discountValue ?? this.discountValue,
+      percentageDiscount: percentageDiscount ?? this.percentageDiscount,
+      flatDiscount: flatDiscount ?? this.flatDiscount,
       roundingMethod: roundingMethod ?? this.roundingMethod,
       cashPaid: cashPaid ?? this.cashPaid,
       upiPaid: upiPaid ?? this.upiPaid,
@@ -198,12 +201,20 @@ class CartNotifier extends StateNotifier<CartState> {
     }
   }
 
-  void setDiscount(String type, double value) {
-    state = state.copyWith(discountType: type, discountValue: value);
+  void setPercentageDiscount(double percent) {
+    state = state.copyWith(percentageDiscount: percent.clamp(0.0, 100.0));
+  }
+
+  void setFlatDiscount(double flat) {
+    state = state.copyWith(flatDiscount: flat < 0 ? 0.0 : flat);
   }
 
   void setManualDiscount(double value) {
-    setDiscount('FLAT', value);
+    setFlatDiscount(value);
+  }
+
+  void clearDiscounts() {
+    state = state.copyWith(percentageDiscount: 0.0, flatDiscount: 0.0);
   }
 
   void incrementQuantity(int index) {
