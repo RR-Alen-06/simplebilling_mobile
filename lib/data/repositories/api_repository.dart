@@ -5,7 +5,6 @@ import 'package:simplebilling_mobile/core/network/supabase_client.dart';
 import 'package:simplebilling_mobile/core/utils/app_logger.dart';
 import 'package:simplebilling_mobile/core/utils/customer_calculator.dart';
 import 'package:simplebilling_mobile/core/utils/rounding_engine.dart';
-import 'package:simplebilling_mobile/data/mock/mock_database.dart';
 import 'package:simplebilling_mobile/data/models/audit_log_model.dart';
 import 'package:simplebilling_mobile/data/models/bill_model.dart';
 import 'package:simplebilling_mobile/data/models/customer_model.dart';
@@ -20,18 +19,8 @@ class ApiRepository {
   static final SupabaseClient _client = SupabaseConfig.client;
   static SupabaseClient get client => _client;
 
-  /// Global toggle for pure Mock / Demo Data mode during testing
-  static bool get isMockMode => SupabaseConfig.isMockMode;
-
-  static void setMockMode(bool value) {
-    SupabaseConfig.setMockMode(value);
-  }
-
   // --- ATOMIC SEQUENCE GENERATOR (ALIGNED WITH POSTGRES RPC & WEB APP) ---
   static Future<String> getNextSequence(String key) async {
-    if (isMockMode) {
-      return MockDatabase.instance.getNextSequence(key);
-    }
 
     try {
       final res = await _client.rpc(
@@ -105,9 +94,7 @@ class ApiRepository {
 
   // --- CUSTOMERS & RUNNING DUES LEDGER ---
   static Future<List<CustomerModel>> getCustomers() async {
-    if (isMockMode) {
-      return MockDatabase.instance.getCustomers();
-    }
+
 
     try {
       final response = await _client
@@ -124,9 +111,7 @@ class ApiRepository {
   }
 
   static Future<List<CustomerModel>> getCustomerSummaries() async {
-    if (isMockMode) {
-      return MockDatabase.instance.getCustomerSummaries();
-    }
+
 
     try {
       final customers = await getCustomers();
@@ -161,9 +146,7 @@ class ApiRepository {
   }
 
   static Future<CustomerModel?> getCustomer(String id) async {
-    if (isMockMode) {
-      return MockDatabase.instance.getCustomer(id);
-    }
+
 
     try {
       final res = await _client.from('customers').select('*').eq('id', id).maybeSingle();
@@ -188,9 +171,7 @@ class ApiRepository {
   }
 
   static Future<List<CustomerLedgerEntry>> getCustomerLedger(String customerId) async {
-    if (isMockMode) {
-      return MockDatabase.instance.getCustomerLedger(customerId);
-    }
+
 
     try {
       final billsRes = await _client.from('bills').select('*').eq('customer_id', customerId).order('created_at', ascending: true);
@@ -278,14 +259,7 @@ class ApiRepository {
     required String paymentMode,
     String? notes,
   }) async {
-    if (isMockMode) {
-      return MockDatabase.instance.recordCustomerPayment(
-        customerId: customerId,
-        amount: amount,
-        paymentMode: paymentMode,
-        notes: notes,
-      );
-    }
+
 
     try {
       final paymentNumber = await getNextSequence('PAYMENT');
@@ -363,9 +337,7 @@ class ApiRepository {
 
   // --- PAYMENTS LIST ---
   static Future<List<PaymentModel>> getPayments() async {
-    if (isMockMode) {
-      return MockDatabase.instance.getPayments();
-    }
+
 
     try {
       final response = await _client
@@ -392,14 +364,7 @@ class ApiRepository {
     required String reason,
     required String adminPin,
   }) async {
-    if (isMockMode) {
-      return MockDatabase.instance.updateBillDiscount(
-        billId: billId,
-        newDiscount: newDiscount,
-        reason: reason,
-        adminPin: adminPin,
-      );
-    }
+
 
     try {
       final billRes = await _client.from('bills').select('*').eq('id', billId).single();
@@ -435,14 +400,7 @@ class ApiRepository {
     String? email,
     double initialAdvance = 0.0,
   }) async {
-    if (isMockMode) {
-      return MockDatabase.instance.createCustomer(
-        name,
-        mobile: mobile,
-        email: email,
-        advance: initialAdvance,
-      );
-    }
+
 
     try {
       final customerCode = await getNextSequence('CUSTOMER');
@@ -477,14 +435,7 @@ class ApiRepository {
     String? mobile,
     String? email,
   }) async {
-    if (isMockMode) {
-      return MockDatabase.instance.updateCustomer(
-        id,
-        name: name,
-        mobile: mobile,
-        email: email,
-      );
-    }
+
 
     try {
       await _client
@@ -501,9 +452,7 @@ class ApiRepository {
   }
 
   static Future<bool> deleteCustomer(String id) async {
-    if (isMockMode) {
-      return MockDatabase.instance.deleteCustomer(id);
-    }
+
 
     try {
       await _client.from('customers').delete().eq('id', id);
@@ -517,9 +466,7 @@ class ApiRepository {
 
   // --- PRODUCTS ---
   static Future<List<ProductModel>> getProducts() async {
-    if (isMockMode) {
-      return MockDatabase.instance.getProducts();
-    }
+
 
     try {
       final response = await _client
@@ -541,14 +488,7 @@ class ApiRepository {
     double price, {
     String? productCode,
   }) async {
-    if (isMockMode) {
-      return MockDatabase.instance.createProduct(
-        name,
-        category,
-        price,
-        productCode: productCode,
-      );
-    }
+
 
     try {
       final code = productCode ?? await getNextSequence('PRODUCT');
@@ -576,9 +516,7 @@ class ApiRepository {
   }
 
   static Future<bool> deleteProduct(String id) async {
-    if (isMockMode) {
-      return MockDatabase.instance.deleteProduct(id);
-    }
+
 
     try {
       await _client.from('products').delete().eq('id', id);
@@ -597,9 +535,7 @@ class ApiRepository {
     required double price,
     String? productCode,
   }) async {
-    if (isMockMode) {
-      return MockDatabase.instance.updateProduct(id, name, category, price);
-    }
+
 
     try {
       final updates = <String, dynamic>{
@@ -626,9 +562,7 @@ class ApiRepository {
 
   // --- EXPENSES ---
   static Future<List<ExpenseModel>> getExpenses() async {
-    if (isMockMode) {
-      return MockDatabase.instance.getExpenses();
-    }
+
 
     try {
       final response = await _client
@@ -651,16 +585,7 @@ class ApiRepository {
     String paymentMode = 'Cash',
     String? notes,
   }) async {
-    if (isMockMode) {
-      return MockDatabase.instance.createExpense(
-        title: title,
-        amount: amount,
-        category: category,
-        paymentMode: paymentMode,
-        notes: notes,
-        date: DateTime.now().toIso8601String(),
-      );
-    }
+
 
     try {
       final expenseNum = await getNextSequence('EXPENSE');
@@ -690,9 +615,7 @@ class ApiRepository {
   }
 
   static Future<bool> deleteExpense(String id) async {
-    if (isMockMode) {
-      return MockDatabase.instance.deleteExpense(id);
-    }
+
 
     try {
       await _client.from('expenses').delete().eq('id', id);
@@ -706,9 +629,7 @@ class ApiRepository {
 
   // --- AUDIT LOGS ---
   static Future<List<AuditLogModel>> getAuditLogs() async {
-    if (isMockMode) {
-      return MockDatabase.instance.getAuditLogs();
-    }
+
 
     try {
       final response = await _client
@@ -730,14 +651,7 @@ class ApiRepository {
     required String entity,
     String? newValue,
   }) async {
-    if (isMockMode) {
-      MockDatabase.instance.logAudit(
-        action: action,
-        entity: entity,
-        newValue: newValue,
-      );
-      return;
-    }
+
 
     try {
       final user = _client.auth.currentUser;
@@ -1003,9 +917,7 @@ class ApiRepository {
 
   // --- BILLS & POS TRANSACTION ENGINE ---
   static Future<List<BillModel>> getBills() async {
-    if (isMockMode) {
-      return MockDatabase.instance.getBills();
-    }
+
 
     try {
       final billsData = await _client
@@ -1048,28 +960,7 @@ class ApiRepository {
     required double loyaltyPointsRedeemed,
     required List<BillItemModel> items,
   }) async {
-    if (isMockMode) {
-      final paidTotal = cashPaid + upiPaid + cardPaid + advanceUsed;
-      return MockDatabase.instance.createBill(
-        items: items,
-        customerId: customerId,
-        total: total,
-        discount: discount,
-        gstAmount: gstAmount,
-        roundingMethod: roundingMethod.name,
-        roundingAdjustment: roundingAdjustment,
-        grandTotal: grandTotal,
-        cashPaid: cashPaid,
-        upiPaid: upiPaid,
-        cardPaid: cardPaid,
-        paidTotal: paidTotal,
-        advanceUsed: advanceUsed,
-        advanceEarned: advanceEarned,
-        paymentMethod: paymentMethod,
-        loyaltyPointsEarned: loyaltyPointsEarned,
-        loyaltyPointsRedeemed: loyaltyPointsRedeemed,
-      );
-    }
+
 
     try {
       final billNumber = await getNextSequence('BILL');
@@ -1202,16 +1093,8 @@ class ApiRepository {
 
   // --- SETTINGS ---
   static Future<AllSettings> getSettings() async {
-    if (isMockMode) {
-      return MockDatabase.instance.getSettings();
-    }
-
     final defaultSettings = AllSettings(
-      shop: ShopSettings(
-        shopName: 'ABC Printing Center',
-        phone: '+91 98765 43210',
-        address: 'Main Road, Shop No. 12',
-      ),
+      shop: ShopSettings(),
       billing: BillingSettings(),
       loyalty: LoyaltySettings(),
     );
@@ -1246,11 +1129,7 @@ class ApiRepository {
   }
 
   static Future<bool> saveSettings(AllSettings settings) async {
-    if (isMockMode) {
-      MockDatabase.instance.updateShopSettings(settings.shop);
-      MockDatabase.instance.updateBillingSettings(settings.billing);
-      return true;
-    }
+
 
     try {
       await _client.from('settings').upsert([
@@ -1271,9 +1150,7 @@ class ApiRepository {
 
   // --- DASHBOARD METRICS ---
   static Future<DashboardStatsModel> getDashboardStats() async {
-    if (isMockMode) {
-      return MockDatabase.instance.getDashboardStats();
-    }
+
 
     try {
       final bills = await getBills();
@@ -1330,194 +1207,14 @@ class ApiRepository {
     }
   }
 
-  // --- DATABASE SEED UTILITY ---
-  static Future<void> seedDefaultCatalogAndCustomers() async {
-    if (isMockMode) {
-      // Already pre-seeded in MockDatabase
-      return;
-    }
-
-    try {
-      final existingProds = await getProducts();
-      if (existingProds.isEmpty) {
-        final seedProducts = [
-          {
-            'name': 'A4 B&W Single',
-            'category': 'Xerox & Print',
-            'price': 2.00,
-            'product_code': 'PRD-000001',
-          },
-          {
-            'name': 'A4 B&W Both Sides',
-            'category': 'Xerox & Print',
-            'price': 3.00,
-            'product_code': 'PRD-000002',
-          },
-          {
-            'name': 'A4 Color Print Single',
-            'category': 'Xerox & Print',
-            'price': 10.00,
-            'product_code': 'PRD-000003',
-          },
-          {
-            'name': 'A4 Color Both Sides',
-            'category': 'Xerox & Print',
-            'price': 18.00,
-            'product_code': 'PRD-000004',
-          },
-          {
-            'name': 'Legal B&W Print',
-            'category': 'Xerox & Print',
-            'price': 3.00,
-            'product_code': 'PRD-000005',
-          },
-          {
-            'name': 'A3 B&W Print',
-            'category': 'Xerox & Print',
-            'price': 5.00,
-            'product_code': 'PRD-000006',
-          },
-          {
-            'name': 'A3 Color Print',
-            'category': 'Xerox & Print',
-            'price': 25.00,
-            'product_code': 'PRD-000007',
-          },
-          {
-            'name': 'Glossy Photo Print 4x6',
-            'category': 'Xerox & Print',
-            'price': 15.00,
-            'product_code': 'PRD-000008',
-          },
-          {
-            'name': 'Glossy Photo Print A4',
-            'category': 'Xerox & Print',
-            'price': 40.00,
-            'product_code': 'PRD-000009',
-          },
-          {
-            'name': 'PVC ID Card Print',
-            'category': 'Xerox & Print',
-            'price': 50.00,
-            'product_code': 'PRD-000010',
-          },
-          {
-            'name': 'A4 Document Lamination',
-            'category': 'Lamination & Binding',
-            'price': 30.00,
-            'product_code': 'PRD-000011',
-          },
-          {
-            'name': 'A3 Certificate Lamination',
-            'category': 'Lamination & Binding',
-            'price': 50.00,
-            'product_code': 'PRD-000012',
-          },
-          {
-            'name': 'ID Card Lamination (Pouch)',
-            'category': 'Lamination & Binding',
-            'price': 15.00,
-            'product_code': 'PRD-000013',
-          },
-          {
-            'name': 'Spiral Binding (Up to 100 pgs)',
-            'category': 'Lamination & Binding',
-            'price': 40.00,
-            'product_code': 'PRD-000014',
-          },
-          {
-            'name': 'Spiral Binding (Over 100 pgs)',
-            'category': 'Lamination & Binding',
-            'price': 60.00,
-            'product_code': 'PRD-000015',
-          },
-          {
-            'name': 'Hard Cover Project Binding',
-            'category': 'Lamination & Binding',
-            'price': 200.00,
-            'product_code': 'PRD-000016',
-          },
-          {
-            'name': 'Ballpoint Pen (Blue/Black)',
-            'category': 'Stationery',
-            'price': 10.00,
-            'product_code': 'PRD-000017',
-          },
-          {
-            'name': 'Gel Pen 0.5mm',
-            'category': 'Stationery',
-            'price': 20.00,
-            'product_code': 'PRD-000018',
-          },
-          {
-            'name': 'A4 75GSM Copier Paper Ream',
-            'category': 'Paper & Envelopes',
-            'price': 280.00,
-            'product_code': 'PRD-000019',
-          },
-          {
-            'name': 'Long Ruled Notebook 180 Pgs',
-            'category': 'Stationery',
-            'price': 60.00,
-            'product_code': 'PRD-000020',
-          },
-          {
-            'name': 'A4 Clear Display Folder (20 Pockets)',
-            'category': 'Stationery',
-            'price': 80.00,
-            'product_code': 'PRD-000021',
-          },
-        ];
-        await _client.from('products').insert(seedProducts);
-      }
-
-      final existingCusts = await getCustomers();
-      if (existingCusts.isEmpty) {
-        final seedCustomers = [
-          {
-            'name': 'Rajesh Sharma (College Staff)',
-            'mobile': '9876543210',
-            'email': 'rajesh.sharma@campus.edu',
-            'advance_balance': 200.00,
-            'loyalty_points': 45.0,
-            'customer_code': 'CUS-000001',
-          },
-          {
-            'name': 'Priya Patel (Architecture Student)',
-            'mobile': '9876543211',
-            'email': 'priya.patel@student.edu',
-            'advance_balance': 50.00,
-            'loyalty_points': 20.0,
-            'customer_code': 'CUS-000002',
-          },
-          {
-            'name': 'Apex Coaching Center (Monthly Account)',
-            'mobile': '9876543212',
-            'email': 'admin@apexcoaching.org',
-            'advance_balance': 0.00,
-            'loyalty_points': 110.0,
-            'customer_code': 'CUS-000003',
-          },
-        ];
-        await _client.from('customers').insert(seedCustomers);
-      }
-    } catch (e) {
-      debugPrint('Error seeding default catalog: $e');
-    }
-  }
-
   // --- SEQUENCE CONFIGURATIONS ---
   static Future<List<SequenceConfigModel>> getSequenceConfigs() async {
-    if (isMockMode) {
-      return MockDatabase.instance.getSequenceConfigs();
-    }
-
     final defaultConfigs = [
       SequenceConfigModel(key: 'BILL', prefix: 'BILL', padding: 6, currentVal: 1),
       SequenceConfigModel(key: 'PAYMENT', prefix: 'PAY', padding: 6, currentVal: 1),
       SequenceConfigModel(key: 'EXPENSE', prefix: 'EXP', padding: 6, currentVal: 1),
-      SequenceConfigModel(key: 'PRODUCT', prefix: 'PRD', padding: 6, currentVal: 22),
-      SequenceConfigModel(key: 'CUSTOMER', prefix: 'CUS', padding: 6, currentVal: 4),
+      SequenceConfigModel(key: 'PRODUCT', prefix: 'PRD', padding: 6, currentVal: 1),
+      SequenceConfigModel(key: 'CUSTOMER', prefix: 'CUS', padding: 6, currentVal: 1),
       SequenceConfigModel(key: 'AUDIT', prefix: 'AUDIT', padding: 6, currentVal: 1),
     ];
 
@@ -1531,11 +1228,9 @@ class ApiRepository {
     }
   }
 
+
   static Future<bool> saveSequenceConfig(SequenceConfigModel config) async {
-    if (isMockMode) {
-      MockDatabase.instance.updateSequenceConfig(config.key, config.prefix, config.padding, config.currentVal);
-      return true;
-    }
+
 
     try {
       await _client.from('sequences').upsert({
@@ -1557,12 +1252,7 @@ class ApiRepository {
   }
 
   static Future<bool> saveLoyaltyRules(List<LoyaltyRule> rules) async {
-    if (isMockMode) {
-      for (final r in rules) {
-        MockDatabase.instance.saveLoyaltyRule(r);
-      }
-      return true;
-    }
+
 
     try {
       for (final r in rules) {
@@ -1581,12 +1271,7 @@ class ApiRepository {
   }
 
   static Future<bool> saveLoyaltyRedemptionRules(List<LoyaltyRedemptionRule> rules) async {
-    if (isMockMode) {
-      for (final r in rules) {
-        MockDatabase.instance.saveLoyaltyRedemptionRule(r);
-      }
-      return true;
-    }
+
 
     try {
       for (final r in rules) {
@@ -1606,9 +1291,7 @@ class ApiRepository {
 
   // --- BACKUP & RESTORE ---
   static Future<Map<String, dynamic>> exportDatabaseBackup() async {
-    if (isMockMode) {
-      return MockDatabase.instance.exportDatabaseBackup();
-    }
+
 
     try {
       final settings = await getSettings();
@@ -1650,9 +1333,7 @@ class ApiRepository {
 
   // --- HIGH-RISK DATA PURGE ---
   static Future<bool> purgeBusinessData() async {
-    if (isMockMode) {
-      return MockDatabase.instance.purgeBusinessData();
-    }
+
 
     try {
       // Execute atomic server-side PostgreSQL RPC function with role-based security

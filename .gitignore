@@ -34,3 +34,11 @@ migrate_working_dir/
 .env
 .env.*
 !.env.example
+
+# IDE module files
+*.iml
+*.ipr
+*.iws
+
+# Flutter crash logs
+*.log
