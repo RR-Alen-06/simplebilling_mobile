@@ -8,6 +8,7 @@ import 'package:simplebilling_mobile/data/models/customer_model.dart';
 import 'package:simplebilling_mobile/data/models/customer_ledger_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
+import 'package:simplebilling_mobile/presentation/shared/printing/receipt_generator.dart';
 import 'package:simplebilling_mobile/providers/billing_provider.dart';
 
 final customerDetailProvider = FutureProvider.family<CustomerModel?, String>((ref, id) async {
@@ -208,6 +209,16 @@ class _CustomerLedgerScreenState extends ConsumerState<CustomerLedgerScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Statement PDF',
+            icon: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.deepLavender),
+            onPressed: () {
+              final cust = customerAsync.valueOrNull;
+              if (cust != null) {
+                _showStatementRangeAndPrint(cust, settings);
+              }
+            },
+          ),
+          IconButton(
             tooltip: 'Refresh Ledger',
             icon: const Icon(Icons.refresh_rounded, color: AppColors.textPrimary),
             onPressed: () {
@@ -245,6 +256,162 @@ class _CustomerLedgerScreenState extends ConsumerState<CustomerLedgerScreen> {
         loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
         error: (err, _) => Center(child: Text('Error loading customer: $err')),
       ),
+    );
+  }
+
+  Future<void> _showStatementRangeAndPrint(CustomerModel customer, AllSettings settings) async {
+    final allBills = ref.read(billsListProvider).valueOrNull ?? [];
+    final customerBills = allBills.where((b) {
+      if (b.customerId != null && b.customerId == customer.id) return true;
+      if (b.customerName != null && b.customerName!.trim().toLowerCase() == customer.name.trim().toLowerCase()) return true;
+      if (b.customerMobile != null && customer.mobile != null && b.customerMobile!.trim() == customer.mobile!.trim()) return true;
+      return false;
+    }).toList();
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (modalCtx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.pastelLavender,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.deepLavender, size: 22),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Customer Statement PDF',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                          ),
+                          Text(
+                            'Select accounting date range for ${customer.name}',
+                            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                ListTile(
+                  leading: const Icon(Icons.all_inclusive_rounded, color: AppColors.deepSky),
+                  title: const Text('All Invoices (Complete History)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                  subtitle: Text('${customerBills.length} Total bills recorded', style: const TextStyle(fontSize: 11)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  onTap: () {
+                    Navigator.of(modalCtx).pop();
+                    ReceiptGenerator.printCustomerStatementPdf(
+                      customer: customer,
+                      customerBills: customerBills,
+                      shop: settings.shop,
+                      billing: settings.billing,
+                      dateRange: null,
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.calendar_month_rounded, color: AppColors.deepMint),
+                  title: const Text('This Month Purchases', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                  subtitle: const Text('From 1st of current month to today', style: TextStyle(fontSize: 11)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  onTap: () {
+                    Navigator.of(modalCtx).pop();
+                    final now = DateTime.now();
+                    final range = DateTimeRange(
+                      start: DateTime(now.year, now.month, 1),
+                      end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
+                    );
+                    ReceiptGenerator.printCustomerStatementPdf(
+                      customer: customer,
+                      customerBills: customerBills,
+                      shop: settings.shop,
+                      billing: settings.billing,
+                      dateRange: range,
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.account_balance_rounded, color: AppColors.deepAmber),
+                  title: const Text('Current Financial Year (FY)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                  subtitle: const Text('From 1st April of current financial cycle', style: TextStyle(fontSize: 11)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  onTap: () {
+                    Navigator.of(modalCtx).pop();
+                    final now = DateTime.now();
+                    final fyStartYear = now.month >= 4 ? now.year : now.year - 1;
+                    final range = DateTimeRange(
+                      start: DateTime(fyStartYear, 4, 1),
+                      end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
+                    );
+                    ReceiptGenerator.printCustomerStatementPdf(
+                      customer: customer,
+                      customerBills: customerBills,
+                      shop: settings.shop,
+                      billing: settings.billing,
+                      dateRange: range,
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.date_range_rounded, color: AppColors.deepLavender),
+                  title: const Text('Custom Date Window...', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                  subtitle: const Text('Pick custom start and end dates', style: TextStyle(fontSize: 11)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  onTap: () async {
+                    Navigator.of(modalCtx).pop();
+                    final picked = await showDateRangePicker(
+                      context: context,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                      initialDateRange: DateTimeRange(
+                        start: DateTime.now().subtract(const Duration(days: 30)),
+                        end: DateTime.now(),
+                      ),
+                    );
+                    if (picked != null) {
+                      ReceiptGenerator.printCustomerStatementPdf(
+                        customer: customer,
+                        customerBills: customerBills,
+                        shop: settings.shop,
+                        billing: settings.billing,
+                        dateRange: picked,
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -335,6 +502,18 @@ class _CustomerLedgerScreenState extends ConsumerState<CustomerLedgerScreen> {
                 icon: const Icon(Icons.payments_rounded, size: 16),
                 label: const Text('+ Record Payment', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
                 onPressed: () => _showRecordPaymentDialog(customer),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.deepLavender,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+                label: const Text('Statement PDF', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                onPressed: () => _showStatementRangeAndPrint(customer, settings),
               ),
               if (customer.balanceDue > 0)
                 OutlinedButton.icon(
