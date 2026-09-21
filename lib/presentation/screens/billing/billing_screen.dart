@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +25,7 @@ class BillingScreen extends ConsumerStatefulWidget {
 
 class _BillingScreenState extends ConsumerState<BillingScreen> {
   int _currentStep = 0; // 0: Items, 1: Customer & Discounts, 2: Payment
+  bool _isCartExpanded = true;
 
   // Custom Item entry
   final TextEditingController _customNameCtrl = TextEditingController(text: 'A4 B&W Single');
@@ -42,6 +44,140 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
   String _selectedPaymentMode = 'Cash'; // Cash, UPI, Card, Credit, Split
 
   bool _isProcessing = false;
+
+  void _showEditQuantityDialog(int itemIndex, BillItemModel item) {
+    final qtyCtrl = TextEditingController(
+      text: item.quantity % 1 == 0 ? item.quantity.toInt().toString() : item.quantity.toString(),
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.edit_note_rounded, color: AppColors.primaryEmerald),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Edit Qty: ${item.productName}',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter exact quantity (e.g. 250 copies, 1.5 units). Enter 0 to remove item.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: qtyCtrl,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Quantity',
+                hintText: 'e.g. 10',
+                prefixIcon: Icon(Icons.pin_outlined),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryEmerald,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              final newQty = double.tryParse(qtyCtrl.text.trim());
+              if (newQty != null && newQty >= 0) {
+                ref.read(cartProvider.notifier).updateItemQuantity(itemIndex, newQty);
+                Navigator.of(ctx).pop();
+              }
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditPriceDialog(int itemIndex, BillItemModel item) {
+    final priceCtrl = TextEditingController(
+      text: item.price % 1 == 0 ? item.price.toInt().toString() : item.price.toStringAsFixed(2),
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.price_change_outlined, color: AppColors.primaryEmerald),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Edit Unit Price: ${item.productName}',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter new unit price per item/page.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: priceCtrl,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Unit Price (₹)',
+                hintText: 'e.g. 2.50',
+                prefixIcon: Icon(Icons.currency_rupee),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryEmerald,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              final newPrice = double.tryParse(priceCtrl.text.trim());
+              if (newPrice != null && newPrice >= 0) {
+                ref.read(cartProvider.notifier).updateItemPrice(itemIndex, newPrice);
+                Navigator.of(ctx).pop();
+              }
+            },
+            child: const Text('Update Price'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -699,9 +835,238 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
 
     return Column(
       children: [
+        // Collapsible Active Cart Section
+        if (cart.items.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.borderMint, width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryEmerald.withValues(alpha: 0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: () => setState(() => _isCartExpanded = !_isCartExpanded),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: AppColors.pastelMint,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.shopping_cart_outlined, color: AppColors.deepMint, size: 16),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Active Cart (${cart.items.length})',
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryContainer,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            Formatters.currency(cart.subtotal),
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primaryDark),
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            foregroundColor: AppColors.error,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                          ),
+                          onPressed: () => ref.read(cartProvider.notifier).reset(),
+                          child: const Text('Clear', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                        ),
+                        Icon(
+                          _isCartExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                          color: AppColors.textSecondary,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_isCartExpanded) ...[
+                  const Divider(height: 1, color: AppColors.border),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      itemCount: cart.items.length,
+                      separatorBuilder: (ctx, i) => const Divider(height: 8, color: AppColors.surfaceVariant),
+                      itemBuilder: (ctx, itemIdx) {
+                        final item = cart.items[itemIdx];
+                        final origProd = item.productId != null
+                            ? products.firstWhereOrNull((p) => p.id == item.productId)
+                            : null;
+                        final isCustomPrice = origProd != null && (origProd.price - item.price).abs() > 0.001;
+                        final qtyDisplay = item.quantity % 1 == 0
+                            ? item.quantity.toInt().toString()
+                            : item.quantity.toString();
+
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.productName,
+                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textPrimary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Row(
+                                    children: [
+                                      // Tap to edit price
+                                      InkWell(
+                                        onTap: () => _showEditPriceDialog(itemIdx, item),
+                                        borderRadius: BorderRadius.circular(4),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: isCustomPrice ? AppColors.pastelAmber : AppColors.surfaceVariant,
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(
+                                              color: isCustomPrice ? AppColors.deepAmber : AppColors.border,
+                                              width: 0.8,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                '@ ₹${item.price % 1 == 0 ? item.price.toInt() : item.price.toStringAsFixed(2)}',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: isCustomPrice ? AppColors.deepAmber : AppColors.textPrimary,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 3),
+                                              Icon(
+                                                Icons.edit,
+                                                size: 10,
+                                                color: isCustomPrice ? AppColors.deepAmber : AppColors.textSecondary,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      if (isCustomPrice) ...[
+                                        const SizedBox(width: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.pastelAmber,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Text(
+                                            'Custom Rate',
+                                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.deepAmber),
+                                          ),
+                                        ),
+                                      ],
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '= ₹${item.total.toStringAsFixed(2)}',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primaryEmerald),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Quantity Controls
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                InkWell(
+                                  onTap: () => ref.read(cartProvider.notifier).decrementQuantity(itemIdx),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(4),
+                                    child: Icon(Icons.remove_circle_outline, color: AppColors.error, size: 18),
+                                  ),
+                                ),
+                                // Tap to edit quantity
+                                InkWell(
+                                  onTap: () => _showEditQuantityDialog(itemIdx, item),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryContainer,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: AppColors.primaryEmerald.withValues(alpha: 0.4)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          qtyDisplay,
+                                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primaryDark),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        const Icon(Icons.edit, size: 10, color: AppColors.primaryDark),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: () => ref.read(cartProvider.notifier).incrementQuantity(itemIdx),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(4),
+                                    child: Icon(Icons.add_circle, color: AppColors.primaryEmerald, size: 18),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                InkWell(
+                                  onTap: () => ref.read(cartProvider.notifier).removeItem(itemIdx),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(4),
+                                    child: Icon(Icons.close, color: AppColors.textMuted, size: 16),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
         // Quick Search & Action Bar
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
           child: Row(
             children: [
               Expanded(
@@ -815,6 +1180,11 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                     );
                     final cartItem = cartIndex >= 0 ? cart.items[cartIndex] : null;
 
+                    final isCustomPrice = cartItem != null && (cartItem.price - prod.price).abs() > 0.001;
+                    final qtyDisplay = cartItem != null
+                        ? (cartItem.quantity % 1 == 0 ? cartItem.quantity.toInt().toString() : cartItem.quantity.toString())
+                        : '0';
+
                     return Container(
                       padding: const EdgeInsets.all(12),
                       decoration: AppTheme.tactileCardDecoration(),
@@ -841,9 +1211,31 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary),
                                 ),
                                 const SizedBox(height: 2),
-                                Text(
-                                  Formatters.currency(prod.price),
-                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primaryEmerald),
+                                Row(
+                                  children: [
+                                    Text(
+                                      Formatters.currency(cartItem != null ? cartItem.price : prod.price),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 13,
+                                        color: isCustomPrice ? AppColors.deepAmber : AppColors.primaryEmerald,
+                                      ),
+                                    ),
+                                    if (isCustomPrice) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.pastelAmber,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Text(
+                                          'Custom',
+                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.deepAmber),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ],
                             ),
@@ -856,9 +1248,29 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                                   icon: const Icon(Icons.remove_circle_outline, color: AppColors.error, size: 22),
                                   onPressed: () => ref.read(cartProvider.notifier).decrementQuantity(cartIndex),
                                 ),
-                                Text(
-                                  '${cartItem.quantity.toInt()}',
-                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                                // Tap to edit quantity in catalog list
+                                InkWell(
+                                  onTap: () => _showEditQuantityDialog(cartIndex, cartItem),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryContainer,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: AppColors.primaryEmerald.withValues(alpha: 0.4)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          qtyDisplay,
+                                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.primaryDark),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        const Icon(Icons.edit, size: 10, color: AppColors.primaryDark),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.add_circle, color: AppColors.primaryEmerald, size: 22),
