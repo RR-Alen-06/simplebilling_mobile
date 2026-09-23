@@ -101,6 +101,7 @@ class ReceiptGenerator {
     final file = File('${tempDir.path}/Invoice_${bill.billNumber}.pdf');
     await file.writeAsBytes(bytes);
 
+    // ignore: deprecated_member_use
     await Share.shareXFiles(
       [XFile(file.path, mimeType: 'application/pdf')],
       text: 'Tax Invoice #${bill.billNumber} from ${shop.shopName}',
@@ -125,9 +126,10 @@ class ReceiptGenerator {
     final bytes = await pdf.save();
     final tempDir = await getTemporaryDirectory();
     final safeCustName = customer.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-    final file = File('${tempDir.path}/Statement_${safeCustName}.pdf');
+    final file = File('${tempDir.path}/Statement_$safeCustName.pdf');
     await file.writeAsBytes(bytes);
 
+    // ignore: deprecated_member_use
     await Share.shareXFiles(
       [XFile(file.path, mimeType: 'application/pdf')],
       text: 'Statement of Account for ${customer.name} from ${shop.shopName}',
