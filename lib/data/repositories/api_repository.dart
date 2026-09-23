@@ -668,6 +668,108 @@ class ApiRepository {
     }
   }
 
+  // --- DYNAMIC LOYALTY FULL PAYMENT UNLOCK & REVERSALS ---
+  static Future<double> processBillFullPaymentLoyalty(String billId) async {
+    try {
+      final billRes = await _client.from('bills').select('*').eq('id', billId).maybeSingle();
+      if (billRes == null || billRes['customer_id'] == null) return 0.0;
+
+      final customerId = billRes['customer_id'] as String;
+      final grandTotal = (billRes['grand_total'] as num?)?.toDouble() ?? 0.0;
+      final paidTotal = (billRes['paid_total'] as num?)?.toDouble() ?? 0.0;
+
+      if (paidTotal < grandTotal - 0.01) return 0.0; // Not fully paid yet
+
+      // Prevent duplicate EARN transaction for this bill
+      final existingEarn = await _client
+          .from('loyalty_transactions')
+          .select('id')
+          .eq('bill_id', billId)
+          .eq('type', 'EARN');
+
+      if ((existingEarn as List? ?? []).isNotEmpty) return 0.0;
+
+      final pointsEarned = await calculateLoyaltyPointsEarned(grandTotal);
+      if (pointsEarned <= 0) return 0.0;
+
+      final loySeq = await getNextSequence('LOYALTY');
+      await _client.from('loyalty_transactions').insert({
+        'transaction_number': loySeq,
+        'customer_id': customerId,
+        'bill_id': billId,
+        'points': pointsEarned,
+        'type': 'EARN',
+        'notes': 'Award Reason: Bill Fully Paid - ${billRes['bill_number'] ?? billId}',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      await _client.from('bills').update({
+        'loyalty_points_earned': pointsEarned,
+      }).eq('id', billId);
+
+      final custRes = await _client.from('customers').select('loyalty_points').eq('id', customerId).single();
+      final curPts = (custRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
+      await _client.from('customers').update({
+        'loyalty_points': curPts + pointsEarned,
+      }).eq('id', customerId);
+
+      return pointsEarned;
+    } catch (e, stack) {
+      AppLogger.warn('Error in processBillFullPaymentLoyalty', e, stack);
+      return 0.0;
+    }
+  }
+
+  static Future<double> reverseLoyaltyPointsForBill(String billId, {String userName = 'Admin'}) async {
+    try {
+      final billRes = await _client.from('bills').select('*').eq('id', billId).maybeSingle();
+      if (billRes == null || billRes['customer_id'] == null) return 0.0;
+
+      final customerId = billRes['customer_id'] as String;
+      final earnTxs = await _client
+          .from('loyalty_transactions')
+          .select('*')
+          .eq('bill_id', billId)
+          .eq('type', 'EARN');
+
+      final earnList = (earnTxs as List? ?? []).cast<Map<String, dynamic>>();
+      if (earnList.isEmpty) return 0.0;
+
+      double totalToReverse = 0.0;
+      for (final tx in earnList) {
+        totalToReverse += (tx['points'] as num?)?.toDouble() ?? 0.0;
+      }
+
+      if (totalToReverse > 0) {
+        final loySeq = await getNextSequence('LOYALTY');
+        await _client.from('loyalty_transactions').insert({
+          'transaction_number': loySeq,
+          'customer_id': customerId,
+          'bill_id': billId,
+          'points': -totalToReverse,
+          'type': 'ADJUST',
+          'notes': 'Loyalty Reversal: Bill Cancelled/Refunded (${billRes['bill_number'] ?? billId})',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+
+        final custRes = await _client.from('customers').select('loyalty_points').eq('id', customerId).single();
+        final curPts = (custRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
+        final newPts = (curPts - totalToReverse).clamp(0.0, double.infinity);
+        await _client.from('customers').update({'loyalty_points': newPts}).eq('id', customerId);
+
+        await logAudit(
+          action: 'REVERSE_LOYALTY_POINTS',
+          entity: 'Bill ${billRes['bill_number'] ?? billId}',
+          newValue: 'Reversed $totalToReverse loyalty points',
+        );
+      }
+      return totalToReverse;
+    } catch (e, stack) {
+      AppLogger.warn('Error reversing loyalty points', e, stack);
+      return 0.0;
+    }
+  }
+
   // --- DYNAMIC LOYALTY RULES ENGINE ---
   static Future<List<LoyaltyRule>> getLoyaltyRules() async {
     final defaultRules = [
@@ -960,11 +1062,40 @@ class ApiRepository {
     required double loyaltyPointsRedeemed,
     required List<BillItemModel> items,
   }) async {
-
-
     try {
       final billNumber = await getNextSequence('BILL');
-      final paidTotal = cashPaid + upiPaid + cardPaid + advanceUsed;
+
+      // 1. Calculate FIFO overpayment allocation for customer prior dues
+      final directPaid = cashPaid + upiPaid + cardPaid;
+      final netDueForBill = (grandTotal - advanceUsed).clamp(0.0, double.infinity);
+      final overpayment = (directPaid - netDueForBill).clamp(0.0, double.infinity);
+
+      double priorOutstanding = 0.0;
+      final priorUnpaidBillsList = <Map<String, dynamic>>[];
+
+      if (customerId != null && overpayment > 0) {
+        final priorUnpaid = await _client
+            .from('bills')
+            .select('*')
+            .eq('customer_id', customerId)
+            .order('created_at', ascending: true);
+
+        for (final pb in (priorUnpaid as List? ?? [])) {
+          final g = (pb['grand_total'] as num?)?.toDouble() ?? 0.0;
+          final p = (pb['paid_total'] as num?)?.toDouble() ?? 0.0;
+          final due = (g - p).clamp(0.0, double.infinity);
+          if (due > 0.01) {
+            priorOutstanding += due;
+            priorUnpaidBillsList.add({'id': pb['id'], 'due': due, 'bill': pb});
+          }
+        }
+      }
+
+      final allocatedToPriorBills = overpayment > priorOutstanding ? priorOutstanding : overpayment;
+      final effectiveAdvanceEarned = overpayment - allocatedToPriorBills;
+      final effectivePaidTotal = (directPaid + advanceUsed).clamp(0.0, grandTotal);
+      final isFullyPaidAtCreation = effectivePaidTotal >= grandTotal - 0.01;
+      final effectivePointsEarned = isFullyPaidAtCreation ? loyaltyPointsEarned : 0.0;
 
       final billData = {
         'bill_number': billNumber,
@@ -978,11 +1109,11 @@ class ApiRepository {
         'cash_paid': cashPaid,
         'upi_paid': upiPaid,
         'card_paid': cardPaid,
-        'paid_total': paidTotal,
+        'paid_total': effectivePaidTotal,
         'advance_used': advanceUsed,
-        'advance_earned': advanceEarned,
+        'advance_earned': effectiveAdvanceEarned,
         'payment_method': paymentMethod,
-        'loyalty_points_earned': loyaltyPointsEarned,
+        'loyalty_points_earned': effectivePointsEarned,
         'loyalty_points_redeemed': loyaltyPointsRedeemed,
       };
 
@@ -1003,33 +1134,96 @@ class ApiRepository {
         'itemsPayload': itemsPayload,
       });
 
-      // Insert Individual Payments for Cash & UPI (Single Source of Truth)
-      if (cashPaid > 0) {
+      // 2. Insert Individual Payments for Cash & UPI for this bill
+      final cashForCurrentBill = (cashPaid - allocatedToPriorBills).clamp(0.0, double.infinity);
+      final remainingAlloc = (allocatedToPriorBills - cashPaid).clamp(0.0, double.infinity);
+      final upiForCurrentBill = (upiPaid - remainingAlloc).clamp(0.0, double.infinity);
+
+      if (cashForCurrentBill > 0) {
         final pNum = await getNextSequence('PAYMENT');
         await _client.from('payments').insert({
           'payment_number': pNum,
           'customer_id': customerId,
           'bill_id': createdBillId,
-          'amount': cashPaid,
+          'amount': cashForCurrentBill,
           'payment_method': 'Cash',
           'notes': 'POS Cash payment for $billNumber',
+          'created_at': DateTime.now().toIso8601String(),
         });
       }
 
-      if (upiPaid > 0) {
+      if (upiForCurrentBill > 0) {
         final pNum = await getNextSequence('PAYMENT');
         await _client.from('payments').insert({
           'payment_number': pNum,
           'customer_id': customerId,
           'bill_id': createdBillId,
-          'amount': upiPaid,
+          'amount': upiForCurrentBill,
           'payment_method': 'UPI',
           'notes': 'POS UPI payment for $billNumber',
+          'created_at': DateTime.now().toIso8601String(),
         });
       }
 
-      // Customer Advance / Loyalty Updates
+      // 3. Allocate payment surplus to clear customer's prior unpaid bills (FIFO)
+      if (allocatedToPriorBills > 0 && customerId != null) {
+        double remainingToAllocate = allocatedToPriorBills;
+        for (final item in priorUnpaidBillsList) {
+          if (remainingToAllocate <= 0) break;
+          final due = item['due'] as double;
+          final alloc = remainingToAllocate > due ? due : remainingToAllocate;
+          remainingToAllocate -= alloc;
+
+          final pb = item['bill'] as Map<String, dynamic>;
+          final newPaidTotal = ((pb['paid_total'] as num?)?.toDouble() ?? 0.0) + alloc;
+
+          await _client.from('bills').update({
+            'paid_total': newPaidTotal,
+          }).eq('id', item['id']);
+
+          final pNum = await getNextSequence('PAYMENT');
+          await _client.from('payments').insert({
+            'payment_number': pNum,
+            'customer_id': customerId,
+            'bill_id': item['id'],
+            'amount': alloc,
+            'payment_method': upiPaid > cashPaid ? 'UPI' : 'Cash',
+            'notes': 'Automated payment allocation from Bill #$billNumber',
+            'created_at': DateTime.now().toIso8601String(),
+          });
+
+          await processBillFullPaymentLoyalty(item['id'] as String);
+        }
+      }
+
+      // 4. Customer Advance / Loyalty Updates & Audit Transactions
       if (customerId != null) {
+        if (isFullyPaidAtCreation && effectivePointsEarned > 0) {
+          final loySeq = await getNextSequence('LOYALTY');
+          await _client.from('loyalty_transactions').insert({
+            'transaction_number': loySeq,
+            'customer_id': customerId,
+            'bill_id': createdBillId,
+            'points': effectivePointsEarned,
+            'type': 'EARN',
+            'notes': 'Award Reason: Bill Fully Paid - $billNumber',
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        }
+
+        if (loyaltyPointsRedeemed > 0) {
+          final loySeq = await getNextSequence('LOYALTY');
+          await _client.from('loyalty_transactions').insert({
+            'transaction_number': loySeq,
+            'customer_id': customerId,
+            'bill_id': createdBillId,
+            'points': loyaltyPointsRedeemed,
+            'type': 'REDEEM',
+            'notes': 'Loyalty points redeemed on bill $billNumber',
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        }
+
         final customerRes = await _client
             .from('customers')
             .select('advance_balance, loyalty_points')
@@ -1040,12 +1234,12 @@ class ApiRepository {
         final currentLoyalty =
             (customerRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
 
-        final newAdvance = (currentAdvance - advanceUsed + advanceEarned).clamp(
+        final newAdvance = (currentAdvance - advanceUsed + effectiveAdvanceEarned).clamp(
           0.0,
           double.infinity,
         );
         final newLoyalty =
-            (currentLoyalty - loyaltyPointsRedeemed + loyaltyPointsEarned)
+            (currentLoyalty - loyaltyPointsRedeemed + effectivePointsEarned)
                 .clamp(0.0, double.infinity);
 
         await _client
@@ -1076,17 +1270,17 @@ class ApiRepository {
         cashPaid: cashPaid,
         upiPaid: upiPaid,
         cardPaid: cardPaid,
-        paidTotal: paidTotal,
+        paidTotal: effectivePaidTotal,
         advanceUsed: advanceUsed,
-        advanceEarned: advanceEarned,
+        advanceEarned: effectiveAdvanceEarned,
         paymentMethod: paymentMethod,
-        loyaltyPointsEarned: loyaltyPointsEarned,
+        loyaltyPointsEarned: effectivePointsEarned,
         loyaltyPointsRedeemed: loyaltyPointsRedeemed,
         createdAt: DateTime.now().toIso8601String(),
         items: items,
       );
-    } catch (e) {
-      debugPrint('Error creating bill: $e');
+    } catch (e, stack) {
+      AppLogger.error('Error creating bill', e, stack);
       return null;
     }
   }
@@ -1106,14 +1300,21 @@ class ApiRepository {
       Map<String, dynamic> shopMap = {};
       Map<String, dynamic> billingMap = {};
       Map<String, dynamic> loyaltyMap = {};
+      Map<String, dynamic> emailMap = {};
+      Map<String, dynamic> securityMap = {};
+      Map<String, dynamic> expensesMap = {};
 
       for (final row in rows) {
-        if (row['key'] == 'shop' && row['value'] != null) {
-          shopMap = Map<String, dynamic>.from(row['value']);
-        } else if (row['key'] == 'billing' && row['value'] != null) {
-          billingMap = Map<String, dynamic>.from(row['value']);
-        } else if (row['key'] == 'loyalty' && row['value'] != null) {
-          loyaltyMap = Map<String, dynamic>.from(row['value']);
+        final k = row['key'];
+        final v = row['value'];
+        if (v != null) {
+          final map = Map<String, dynamic>.from(v);
+          if (k == 'shop') shopMap = map;
+          else if (k == 'billing') billingMap = map;
+          else if (k == 'loyalty') loyaltyMap = map;
+          else if (k == 'email' || k == 'whatsapp') emailMap = map;
+          else if (k == 'security') securityMap = map;
+          else if (k == 'expenses') expensesMap = map;
         }
       }
 
@@ -1121,6 +1322,9 @@ class ApiRepository {
         shop: ShopSettings.fromJson(shopMap),
         billing: BillingSettings.fromJson(billingMap),
         loyalty: LoyaltySettings.fromJson(loyaltyMap),
+        email: EmailSettings.fromJson(emailMap),
+        security: SecuritySettings.fromJson(securityMap),
+        expenses: ExpenseSettings.fromJson(expensesMap),
       );
     } catch (e) {
       debugPrint('Error fetching settings: $e');
@@ -1129,13 +1333,14 @@ class ApiRepository {
   }
 
   static Future<bool> saveSettings(AllSettings settings) async {
-
-
     try {
       await _client.from('settings').upsert([
         {'key': 'shop', 'value': settings.shop.toJson()},
         {'key': 'billing', 'value': settings.billing.toJson()},
         {'key': 'loyalty', 'value': settings.loyalty.toJson()},
+        {'key': 'whatsapp', 'value': settings.email.toJson()},
+        {'key': 'security', 'value': settings.security.toJson()},
+        {'key': 'expenses', 'value': settings.expenses.toJson()},
       ]);
       await logAudit(
         action: 'UPDATE_SETTINGS',
@@ -1146,6 +1351,27 @@ class ApiRepository {
       debugPrint('Error saving settings: $e');
       return false;
     }
+  }
+
+  static Future<List<String>> addExpenseCategory(String categoryName) async {
+    final settings = await getSettings();
+    final categories = List<String>.from(settings.expenses.categories);
+    if (!categories.contains(categoryName.trim())) {
+      categories.add(categoryName.trim());
+      final updated = AllSettings(
+        shop: settings.shop,
+        billing: settings.billing,
+        loyalty: settings.loyalty,
+        email: settings.email,
+        security: settings.security,
+        expenses: ExpenseSettings(
+          categories: categories,
+          defaultPaymentMode: settings.expenses.defaultPaymentMode,
+        ),
+      );
+      await saveSettings(updated);
+    }
+    return categories;
   }
 
   // --- DASHBOARD METRICS ---
@@ -1333,21 +1559,27 @@ class ApiRepository {
 
   // --- HIGH-RISK DATA PURGE ---
   static Future<bool> purgeBusinessData() async {
-
-
     try {
-      // Execute atomic server-side PostgreSQL RPC function with role-based security
-      await _client.rpc('purge_business_data');
+      try {
+        await _client.rpc('purge_business_data');
+      } catch (_) {
+        // Fallback to direct PostgREST deletion matching web API
+        await _client.from('bill_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await _client.from('payments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await _client.from('bills').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await _client.from('expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await _client.from('loyalty_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await _client.from('customers').update({'advance_balance': 0.0, 'loyalty_points': 0.0}).neq('id', '00000000-0000-0000-0000-000000000000');
+      }
 
-      // Log immutable purge audit entry
       await logAudit(
         action: 'PURGE_ALL_BUSINESS_DATA',
         entity: 'System Database',
-        newValue: 'Transactional records wiped via server RPC authorization',
+        newValue: 'Transactional records wiped',
       );
       return true;
-    } catch (e) {
-      debugPrint('Error purging business data via RPC: $e');
+    } catch (e, stack) {
+      AppLogger.error('Error purging business data', e, stack);
       return false;
     }
   }

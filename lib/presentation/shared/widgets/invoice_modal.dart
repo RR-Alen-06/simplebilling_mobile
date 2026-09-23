@@ -173,9 +173,26 @@ class InvoiceModal {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
                     icon: const Icon(Icons.send_rounded, size: 16),
-                    label: const Text('WhatsApp Receipt', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                    label: const Text('WhatsApp Text', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
                     onPressed: () {
                       WhatsAppSender.sendInvoice(
+                        bill: bill,
+                        shop: settings.shop,
+                        billing: settings.billing,
+                      );
+                    },
+                  ),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.deepLavender,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    icon: const Icon(Icons.share_rounded, size: 16),
+                    label: const Text('Share PDF File', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                    onPressed: () {
+                      ReceiptGenerator.sharePdfInvoiceFile(
                         bill: bill,
                         shop: settings.shop,
                         billing: settings.billing,

@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart' show DateTimeRange;
 import 'package:pdf/pdf.dart';
@@ -79,6 +82,55 @@ class ReceiptGenerator {
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
       name: 'Invoice_A4_${bill.billNumber}.pdf',
+    );
+  }
+
+  /// Share PDF invoice file via native OS share sheet (WhatsApp, Email, Files, etc.)
+  static Future<void> sharePdfInvoiceFile({
+    required BillModel bill,
+    required ShopSettings shop,
+    required BillingSettings billing,
+    bool forceA4 = false,
+  }) async {
+    final pdf = forceA4 || billing.defaultPrinterSize == 'A4'
+        ? _generateA4Invoice(bill, shop, billing)
+        : _generateThermalReceipt(bill, shop, billing, paperWidthMm: billing.defaultPrinterSize == '58mm' ? 58 : 80);
+    
+    final bytes = await pdf.save();
+    final tempDir = await getTemporaryDirectory();
+    final file = File('${tempDir.path}/Invoice_${bill.billNumber}.pdf');
+    await file.writeAsBytes(bytes);
+
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'application/pdf')],
+      text: 'Tax Invoice #${bill.billNumber} from ${shop.shopName}',
+    );
+  }
+
+  /// Share Customer Statement PDF via native OS share sheet
+  static Future<void> shareCustomerStatementPdfFile({
+    required CustomerModel customer,
+    required List<BillModel> customerBills,
+    required ShopSettings shop,
+    required BillingSettings billing,
+    DateTimeRange? dateRange,
+  }) async {
+    final pdf = _generateCustomerStatementPdf(
+      customer: customer,
+      bills: customerBills,
+      shop: shop,
+      billing: billing,
+      dateRange: dateRange,
+    );
+    final bytes = await pdf.save();
+    final tempDir = await getTemporaryDirectory();
+    final safeCustName = customer.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final file = File('${tempDir.path}/Statement_${safeCustName}.pdf');
+    await file.writeAsBytes(bytes);
+
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'application/pdf')],
+      text: 'Statement of Account for ${customer.name} from ${shop.shopName}',
     );
   }
 
