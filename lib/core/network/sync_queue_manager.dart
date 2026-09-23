@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,7 +17,12 @@ class SyncQueueManager {
   static const _uuid = Uuid();
 
   String get _currentQueueKey {
-    final uid = SupabaseConfig.client.auth.currentUser?.id ?? 'guest';
+    String uid = 'guest';
+    if (!SupabaseConfig.isMockMode) {
+      try {
+        uid = SupabaseConfig.client.auth.currentUser?.id ?? 'guest';
+      } catch (_) {}
+    }
     return 'printpro_sync_queue_$uid';
   }
 

@@ -19,8 +19,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailCtrl = TextEditingController(text: 'admin@shop.com');
-  final TextEditingController _passwordCtrl = TextEditingController(text: 'admin123');
+  final TextEditingController _emailCtrl = TextEditingController();
+  final TextEditingController _passwordCtrl = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
   String? _errorMsg;
@@ -45,16 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMsg = null;
     });
 
-    // 1. Check Built-in Master Admin Bypass
-    if ((email == 'admin@shop.com' || email == 'admin@simplebilling.com') &&
-        (password == 'admin123' || password == '123456')) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('printpro_local_auth', 'authenticated');
-      widget.onLoginSuccess();
-      return;
-    }
-
-    // 2. Supabase Cloud Auth with auto-sign-up fallback
+    // Supabase Cloud Auth with auto-sign-up fallback
     try {
       final res = await SupabaseConfig.client.auth.signInWithPassword(
         email: email,
@@ -66,31 +57,14 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('printpro_local_auth', res.user!.id);
         widget.onLoginSuccess();
         return;
+      } else {
+        setState(() => _errorMsg = 'Invalid credentials. Please verify your email and password.');
       }
     } catch (e) {
-      try {
-        final signUpRes = await SupabaseConfig.client.auth.signUp(
-          email: email,
-          password: password,
-        );
-        if (signUpRes.user != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('printpro_local_auth', signUpRes.user!.id);
-          widget.onLoginSuccess();
-          return;
-        }
-      } catch (_) {}
-
-      setState(() => _errorMsg = 'Authentication error: ${e.toString().replaceAll('Exception:', '')}');
+      setState(() => _errorMsg = 'Authentication failed: ${e.toString().replaceAll('Exception:', '')}');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  Future<void> _handleQuickDemoLogin() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('printpro_local_auth', 'demo_admin_session');
-    widget.onLoginSuccess();
   }
 
   @override
@@ -413,24 +387,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         Icon(Icons.arrow_forward_rounded, size: 18),
                       ],
                     ),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // ⚡ Quick Demo Preset Shortcut
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.deepMint,
-                backgroundColor: AppColors.pastelMint.withValues(alpha: 0.6),
-                side: const BorderSide(color: AppColors.borderMint, width: 1.2),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              icon: const Icon(Icons.bolt_rounded, size: 18, color: AppColors.deepMint),
-              label: const Text('⚡ Quick Demo Login (admin@shop.com)', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
-              onPressed: _handleQuickDemoLogin,
             ),
           ),
 

@@ -11,6 +11,7 @@ import 'package:simplebilling_mobile/data/models/customer_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
 import 'package:simplebilling_mobile/presentation/screens/customers/customer_ledger_screen.dart';
+import 'package:simplebilling_mobile/presentation/shared/printing/receipt_generator.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/sync_status_badge.dart';
 import 'package:simplebilling_mobile/providers/billing_provider.dart';
 
@@ -590,7 +591,7 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                           ),
                                           icon: const Icon(Icons.account_balance_wallet_rounded, size: 15),
-                                          label: const Text('View Ledger Statement', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+                                          label: const Text('View Ledger', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
                                           onPressed: () {
                                             Navigator.of(context).push(
                                               MaterialPageRoute(
@@ -600,8 +601,34 @@ class _CustomersListScreenState extends ConsumerState<CustomersListScreen> {
                                           },
                                         ),
                                       ),
+                                      const SizedBox(width: 6),
+                                      IconButton(
+                                        style: IconButton.styleFrom(
+                                          backgroundColor: AppColors.pastelLavender,
+                                          side: const BorderSide(color: AppColors.deepLavender),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        ),
+                                        icon: const Icon(Icons.picture_as_pdf_rounded, size: 16, color: AppColors.deepLavender),
+                                        tooltip: 'Print Statement PDF',
+                                        onPressed: () {
+                                          final allBills = ref.read(billsListProvider).valueOrNull ?? [];
+                                          final customerBills = allBills.where((b) {
+                                            if (b.customerId != null && b.customerId == cust.id) return true;
+                                            if (b.customerName != null && b.customerName!.trim().toLowerCase() == cust.name.trim().toLowerCase()) return true;
+                                            if (b.customerMobile != null && cust.mobile != null && b.customerMobile!.trim() == cust.mobile!.trim()) return true;
+                                            return false;
+                                          }).toList();
+
+                                          ReceiptGenerator.printCustomerStatementPdf(
+                                            customer: cust,
+                                            customerBills: customerBills,
+                                            shop: settings.shop,
+                                            billing: settings.billing,
+                                          );
+                                        },
+                                      ),
                                       if (cust.balanceDue > 0) ...[
-                                        const SizedBox(width: 8),
+                                        const SizedBox(width: 6),
                                         IconButton(
                                           style: IconButton.styleFrom(
                                             backgroundColor: AppColors.pastelCoral,

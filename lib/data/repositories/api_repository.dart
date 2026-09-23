@@ -2,6 +2,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simplebilling_mobile/core/network/supabase_client.dart';
+import 'package:simplebilling_mobile/core/utils/app_logger.dart';
+import 'package:simplebilling_mobile/core/utils/customer_calculator.dart';
 import 'package:simplebilling_mobile/core/utils/rounding_engine.dart';
 import 'package:simplebilling_mobile/data/mock/mock_database.dart';
 import 'package:simplebilling_mobile/data/models/audit_log_model.dart';
@@ -10,6 +12,7 @@ import 'package:simplebilling_mobile/data/models/customer_model.dart';
 import 'package:simplebilling_mobile/data/models/customer_ledger_model.dart';
 import 'package:simplebilling_mobile/data/models/dashboard_stats_model.dart';
 import 'package:simplebilling_mobile/data/models/expense_model.dart';
+import 'package:simplebilling_mobile/data/models/payment_model.dart';
 import 'package:simplebilling_mobile/data/models/product_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 
@@ -18,10 +21,10 @@ class ApiRepository {
   static SupabaseClient get client => _client;
 
   /// Global toggle for pure Mock / Demo Data mode during testing
-  static bool isMockMode = true;
+  static bool get isMockMode => SupabaseConfig.isMockMode;
 
   static void setMockMode(bool value) {
-    isMockMode = value;
+    SupabaseConfig.setMockMode(value);
   }
 
   // --- ATOMIC SEQUENCE GENERATOR (ALIGNED WITH POSTGRES RPC & WEB APP) ---
@@ -38,8 +41,8 @@ class ApiRepository {
       if (res != null && res.toString().isNotEmpty) {
         return res.toString();
       }
-    } catch (e) {
-      debugPrint('RPC get_next_sequence failed, falling back: $e');
+    } catch (e, stack) {
+      AppLogger.warn('RPC get_next_sequence failed, falling back', e, stack);
     }
 
     try {
@@ -68,7 +71,8 @@ class ApiRepository {
       });
 
       return '$prefix-${nextVal.toString().padLeft(padding, '0')}';
-    } catch (e) {
+    } catch (e, stack) {
+      AppLogger.warn('Sequence fallback to timestamp', e, stack);
       // Fallback timestamp code when offline or no permission
       final suffix = DateTime.now().millisecondsSinceEpoch.toString().substring(
         7,
@@ -94,8 +98,8 @@ class ApiRepository {
         }
       }
       await _client.auth.signOut();
-    } catch (e) {
-      debugPrint('Error signing out: $e');
+    } catch (e, stack) {
+      AppLogger.error('Error signing out', e, stack);
     }
   }
 
@@ -113,8 +117,8 @@ class ApiRepository {
       return (response as List)
           .map((json) => CustomerModel.fromJson(json))
           .toList();
-    } catch (e) {
-      debugPrint('Error fetching customers: $e');
+    } catch (e, stack) {
+      AppLogger.error('Error fetching customers', e, stack);
       return [];
     }
   }
@@ -135,8 +139,8 @@ class ApiRepository {
           .from('payments')
           .select('customer_id, amount, bill_id');
 
-      final billsList = (billsRes as List? ?? []);
-      final paymentsList = (paymentsRes as List? ?? []);
+      final billsList = (billsRes as List? ?? []).cast<Map<String, dynamic>>();
+      final paymentsList = (paymentsRes as List? ?? []).cast<Map<String, dynamic>>();
 
       return customers.map((cust) {
         final custBills = billsList.where((b) => b['customer_id'] == cust.id);
@@ -144,31 +148,14 @@ class ApiRepository {
           (p) => p['customer_id'] == cust.id && p['bill_id'] == null,
         );
 
-        final totalBilled = custBills.fold<double>(
-          0.0,
-          (sum, b) => sum + ((b['grand_total'] as num?)?.toDouble() ?? 0.0),
-        );
-        final billPayments = custBills.fold<double>(
-          0.0,
-          (sum, b) => sum + ((b['paid_total'] as num?)?.toDouble() ?? 0.0),
-        );
-        final directPaymentsTotal = directPayments.fold<double>(
-          0.0,
-          (sum, p) => sum + ((p['amount'] as num?)?.toDouble() ?? 0.0),
-        );
-
-        final totalPaid = billPayments + directPaymentsTotal;
-        final balanceDue = (totalBilled - totalPaid - cust.advanceBalance)
-            .clamp(0.0, double.infinity);
-
-        return cust.copyWith(
-          totalBilled: totalBilled,
-          totalPaid: totalPaid,
-          balanceDue: balanceDue,
+        return CustomerCalculator.applyBalances(
+          customer: cust,
+          bills: custBills,
+          directPayments: directPayments,
         );
       }).toList();
-    } catch (e) {
-      debugPrint('Error calculating customer summaries: $e');
+    } catch (e, stack) {
+      AppLogger.error('Error calculating customer summaries', e, stack);
       return getCustomers();
     }
   }
@@ -186,32 +173,16 @@ class ApiRepository {
       final billsRes = await _client.from('bills').select('grand_total, paid_total').eq('customer_id', id);
       final paymentsRes = await _client.from('payments').select('amount, bill_id').eq('customer_id', id);
 
-      final billsList = (billsRes as List? ?? []);
-      final paymentsList = (paymentsRes as List? ?? []);
+      final billsList = (billsRes as List? ?? []).cast<Map<String, dynamic>>();
+      final paymentsList = (paymentsRes as List? ?? []).cast<Map<String, dynamic>>();
 
-      final totalBilled = billsList.fold<double>(
-        0.0,
-        (s, b) => s + ((b['grand_total'] as num?)?.toDouble() ?? 0.0),
+      return CustomerCalculator.applyBalances(
+        customer: cust,
+        bills: billsList,
+        directPayments: paymentsList.where((p) => p['bill_id'] == null),
       );
-      final billPaid = billsList.fold<double>(
-        0.0,
-        (s, b) => s + ((b['paid_total'] as num?)?.toDouble() ?? 0.0),
-      );
-      final directPaid = paymentsList.where((p) => p['bill_id'] == null).fold<double>(
-        0.0,
-        (s, p) => s + ((p['amount'] as num?)?.toDouble() ?? 0.0),
-      );
-
-      final totalPaid = billPaid + directPaid;
-      final balanceDue = (totalBilled - totalPaid - cust.advanceBalance).clamp(0.0, double.infinity);
-
-      return cust.copyWith(
-        totalBilled: totalBilled,
-        totalPaid: totalPaid,
-        balanceDue: balanceDue,
-      );
-    } catch (e) {
-      debugPrint('Error getting customer: $e');
+    } catch (e, stack) {
+      AppLogger.error('Error getting customer', e, stack);
       return null;
     }
   }
@@ -387,6 +358,31 @@ class ApiRepository {
     } catch (e) {
       debugPrint('Error recording customer payment: $e');
       return false;
+    }
+  }
+
+  // --- PAYMENTS LIST ---
+  static Future<List<PaymentModel>> getPayments() async {
+    if (isMockMode) {
+      return MockDatabase.instance.getPayments();
+    }
+
+    try {
+      final response = await _client
+          .from('payments')
+          .select('*, customer:customers(name, mobile)')
+          .order('created_at', ascending: false);
+      return (response as List).map((json) {
+        final cust = json['customer'] as Map<String, dynamic>?;
+        return PaymentModel.fromJson({
+          ...json,
+          'customer_name': cust?['name'],
+          'customer_mobile': cust?['mobile'],
+        });
+      }).toList();
+    } catch (e, stack) {
+      AppLogger.error('Error fetching payments', e, stack);
+      return [];
     }
   }
 
@@ -1659,29 +1655,18 @@ class ApiRepository {
     }
 
     try {
-      // 1. Delete transactional data
-      await _client.from('bills').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await _client.from('payments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await _client.from('expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      // Execute atomic server-side PostgreSQL RPC function with role-based security
+      await _client.rpc('purge_business_data');
 
-      // 2. Reset customer transaction balances
-      await _client.from('customers').update({
-        'advance_balance': 0.0,
-        'loyalty_points': 0.0,
-      }).neq('id', '00000000-0000-0000-0000-000000000000');
-
-      // 3. Reset bill & payment sequence counters
-      await _client.from('sequences').update({'current_val': 1}).inFilter('key', ['BILL', 'PAYMENT', 'EXPENSE']);
-
-      // 4. Log immutable purge audit entry
+      // Log immutable purge audit entry
       await logAudit(
         action: 'PURGE_ALL_BUSINESS_DATA',
         entity: 'System Database',
-        newValue: 'Transactional records wiped by Super Admin authorization',
+        newValue: 'Transactional records wiped via server RPC authorization',
       );
       return true;
     } catch (e) {
-      debugPrint('Error purging business data: $e');
+      debugPrint('Error purging business data via RPC: $e');
       return false;
     }
   }

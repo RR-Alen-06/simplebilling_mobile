@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/customer_model.dart';
+import '../data/models/payment_model.dart';
 import '../data/models/product_model.dart';
 import '../data/models/bill_model.dart';
 import '../data/models/expense_model.dart';
@@ -17,6 +18,10 @@ final customersProvider = FutureProvider<List<CustomerModel>>((ref) async {
 
 final customerSummariesProvider = FutureProvider<List<CustomerModel>>((ref) async {
   return await ApiRepository.getCustomerSummaries();
+});
+
+final paymentsProvider = FutureProvider<List<PaymentModel>>((ref) async {
+  return await ApiRepository.getPayments();
 });
 
 final productsProvider = FutureProvider<List<ProductModel>>((ref) async {
@@ -191,14 +196,23 @@ class CartNotifier extends StateNotifier<CartState> {
 
   void selectCustomer(CustomerModel? customer) {
     if (customer == null) {
-      state = state.copyWith(clearCustomer: true, useAdvance: false, advanceUsed: 0.0);
+      state = state.copyWith(clearCustomer: true, useAdvance: false, advanceUsed: 0.0, pointsToRedeem: 0.0);
     } else {
       state = state.copyWith(
         selectedCustomer: customer,
         useAdvance: customer.advanceBalance > 0,
         advanceUsed: customer.advanceBalance > 0 ? customer.advanceBalance : 0.0,
+        pointsToRedeem: 0.0,
       );
     }
+  }
+
+  void setPointsToRedeem(double points) {
+    state = state.copyWith(pointsToRedeem: points < 0 ? 0.0 : points);
+  }
+
+  void clearPointsToRedeem() {
+    state = state.copyWith(pointsToRedeem: 0.0);
   }
 
   void setPercentageDiscount(double percent) {

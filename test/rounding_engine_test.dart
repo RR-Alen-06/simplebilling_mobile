@@ -109,7 +109,7 @@ void main() {
       final text = WhatsAppSender.generateInvoiceText(
         bill: bill,
         shop: ShopSettings(shopName: 'PrintPro Studio'),
-        billing: BillingSettings(),
+        billing: BillingSettings(currencySymbol: 'Rs.'),
       );
 
       expect(text.contains('PRINTPRO STUDIO'), isTrue);
@@ -132,7 +132,7 @@ void main() {
       final reminder = WhatsAppSender.generateDuePaymentReminderText(
         customer: customer,
         shop: ShopSettings(shopName: 'PrintPro Studio', upiId: 'printpro@okaxis'),
-        billing: BillingSettings(),
+        billing: BillingSettings(currencySymbol: 'Rs.'),
       );
 
       expect(reminder.contains('PAYMENT REMINDER'), isTrue);
