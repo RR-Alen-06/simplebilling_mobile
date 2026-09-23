@@ -284,12 +284,58 @@ class SecuritySettings {
   }
 }
 
+class ExpenseSettings {
+  final List<String> categories;
+  final String defaultPaymentMode;
+
+  ExpenseSettings({
+    this.categories = const [
+      'Shop Expense',
+      'Electricity',
+      'Rent',
+      'Paper Stock & Rolls',
+      'Toner & Cartridges',
+      'Machine Maintenance',
+      'Staff Wages',
+      'Other Expense',
+    ],
+    this.defaultPaymentMode = 'Cash',
+  });
+
+  factory ExpenseSettings.fromJson(Map<String, dynamic> json) {
+    final rawCats = json['categories'] as List?;
+    return ExpenseSettings(
+      categories: rawCats != null
+          ? rawCats.map((e) => e.toString()).toList()
+          : const [
+              'Shop Expense',
+              'Electricity',
+              'Rent',
+              'Paper Stock & Rolls',
+              'Toner & Cartridges',
+              'Machine Maintenance',
+              'Staff Wages',
+              'Other Expense',
+            ],
+      defaultPaymentMode: json['default_payment_mode'] as String? ?? 'Cash',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'categories': categories,
+      'default_payment_mode': defaultPaymentMode,
+    };
+  }
+}
+
 class AllSettings {
   final ShopSettings shop;
   final BillingSettings billing;
   final LoyaltySettings loyalty;
   final EmailSettings email;
   final SecuritySettings security;
+  final ExpenseSettings expenses;
 
   AllSettings({
     required this.shop,
@@ -297,8 +343,10 @@ class AllSettings {
     required this.loyalty,
     EmailSettings? email,
     SecuritySettings? security,
+    ExpenseSettings? expenses,
   })  : email = email ?? EmailSettings(),
-        security = security ?? SecuritySettings();
+        security = security ?? SecuritySettings(),
+        expenses = expenses ?? ExpenseSettings();
 
   factory AllSettings.fromJson(Map<String, dynamic> json) {
     return AllSettings(
@@ -307,6 +355,7 @@ class AllSettings {
       loyalty: LoyaltySettings.fromJson(json['loyalty'] as Map<String, dynamic>? ?? {}),
       email: EmailSettings.fromJson(json['email'] as Map<String, dynamic>? ?? {}),
       security: SecuritySettings.fromJson(json['security'] as Map<String, dynamic>? ?? {}),
+      expenses: ExpenseSettings.fromJson(json['expenses'] as Map<String, dynamic>? ?? {}),
     );
   }
 
@@ -317,6 +366,7 @@ class AllSettings {
       'loyalty': loyalty.toJson(),
       'email': email.toJson(),
       'security': security.toJson(),
+      'expenses': expenses.toJson(),
     };
   }
 }
