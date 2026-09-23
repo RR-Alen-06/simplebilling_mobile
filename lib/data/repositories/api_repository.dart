@@ -1309,12 +1309,19 @@ class ApiRepository {
         final v = row['value'];
         if (v != null) {
           final map = Map<String, dynamic>.from(v);
-          if (k == 'shop') shopMap = map;
-          else if (k == 'billing') billingMap = map;
-          else if (k == 'loyalty') loyaltyMap = map;
-          else if (k == 'email' || k == 'whatsapp') emailMap = map;
-          else if (k == 'security') securityMap = map;
-          else if (k == 'expenses') expensesMap = map;
+          if (k == 'shop') {
+            shopMap = map;
+          } else if (k == 'billing') {
+            billingMap = map;
+          } else if (k == 'loyalty') {
+            loyaltyMap = map;
+          } else if (k == 'email' || k == 'whatsapp') {
+            emailMap = map;
+          } else if (k == 'security') {
+            securityMap = map;
+          } else if (k == 'expenses') {
+            expensesMap = map;
+          }
         }
       }
 
