@@ -36,22 +36,24 @@ class _SimpleBillingAppState extends ConsumerState<SimpleBillingApp> {
   @override
   void initState() {
     super.initState();
-    _currentUser = SupabaseConfig.client.auth.currentUser;
-    _setupRealtime();
+    if (SupabaseConfig.isInitialized) {
+      _currentUser = SupabaseConfig.client.auth.currentUser;
+      _setupRealtime();
 
-    SupabaseConfig.client.auth.onAuthStateChange.listen((data) {
-      if (mounted) {
-        setState(() {
-          _currentUser = data.session?.user;
-        });
-        if (_currentUser != null) {
-          _setupRealtime();
-          SyncQueueManager.instance.initialize();
-        } else {
-          RealtimeSyncManager.instance.unsubscribe();
+      SupabaseConfig.client.auth.onAuthStateChange.listen((data) {
+        if (mounted) {
+          setState(() {
+            _currentUser = data.session?.user;
+          });
+          if (_currentUser != null) {
+            _setupRealtime();
+            SyncQueueManager.instance.initialize();
+          } else {
+            RealtimeSyncManager.instance.unsubscribe();
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   void _setupRealtime() {
