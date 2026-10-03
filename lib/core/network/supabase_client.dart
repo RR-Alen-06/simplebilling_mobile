@@ -5,20 +5,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class SupabaseConfig {
   SupabaseConfig._();
 
-  static const String _defaultUrl = 'https://your-project.supabase.co';
-  static const String _defaultKey = 'your-supabase-publishable-key';
-
   static String get supabaseUrl =>
       dotenv.env['SUPABASE_URL'] ??
-      (const String.fromEnvironment('SUPABASE_URL', defaultValue: '').isNotEmpty
-          ? const String.fromEnvironment('SUPABASE_URL')
-          : _defaultUrl);
+      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
 
   static String get supabasePublishableKey =>
       dotenv.env['SUPABASE_PUBLISHABLE_KEY'] ??
-      (const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY', defaultValue: '').isNotEmpty
-          ? const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY')
-          : _defaultKey);
+      const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY', defaultValue: '');
 
   static bool get isInitialized {
     try {

@@ -1092,7 +1092,7 @@ class ApiRepository {
       }
 
       final allocatedToPriorBills = overpayment > priorOutstanding ? priorOutstanding : overpayment;
-      final effectiveAdvanceEarned = overpayment - allocatedToPriorBills;
+      final effectiveAdvanceEarned = customerId != null ? (overpayment - allocatedToPriorBills) : 0.0;
       final effectivePaidTotal = (directPaid + advanceUsed).clamp(0.0, grandTotal);
       final isFullyPaidAtCreation = effectivePaidTotal >= grandTotal - 0.01;
       final effectivePointsEarned = isFullyPaidAtCreation ? loyaltyPointsEarned : 0.0;

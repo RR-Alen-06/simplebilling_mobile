@@ -100,10 +100,17 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
             ),
             onPressed: () {
               final newQty = double.tryParse(qtyCtrl.text.trim());
-              if (newQty != null && newQty >= 0) {
-                ref.read(cartProvider.notifier).updateItemQuantity(itemIndex, newQty);
-                Navigator.of(ctx).pop();
+              if (newQty == null || newQty < 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a valid quantity (0 or greater)'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+                return;
               }
+              ref.read(cartProvider.notifier).updateItemQuantity(itemIndex, newQty);
+              Navigator.of(ctx).pop();
             },
             child: const Text('Update'),
           ),
@@ -167,10 +174,17 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
             ),
             onPressed: () {
               final newPrice = double.tryParse(priceCtrl.text.trim());
-              if (newPrice != null && newPrice >= 0) {
-                ref.read(cartProvider.notifier).updateItemPrice(itemIndex, newPrice);
-                Navigator.of(ctx).pop();
+              if (newPrice == null || newPrice < 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a valid unit price (0 or greater)'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+                return;
               }
+              ref.read(cartProvider.notifier).updateItemPrice(itemIndex, newPrice);
+              Navigator.of(ctx).pop();
             },
             child: const Text('Update Price'),
           ),
@@ -421,11 +435,38 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
     );
   }
 
-  void _addCustomItem() {
+  bool _addCustomItem() {
     final name = _customNameCtrl.text.trim();
-    final qty = double.tryParse(_customQtyCtrl.text) ?? 1.0;
-    final price = double.tryParse(_customPriceCtrl.text) ?? 0.0;
-    if (name.isEmpty || qty <= 0 || price < 0) return;
+    final qty = double.tryParse(_customQtyCtrl.text);
+    final price = double.tryParse(_customPriceCtrl.text);
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter an item name'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return false;
+    }
+    if (qty == null || qty <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Quantity must be greater than 0'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return false;
+    }
+    if (price == null || price < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Price cannot be negative'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return false;
+    }
 
     ref.read(cartProvider.notifier).addItem(name, price, qty);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -434,6 +475,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
         duration: const Duration(milliseconds: 500),
       ),
     );
+    return true;
   }
 
   void _openBarcodeScanner(List<ProductModel> products, List<CustomerModel> customers) {
@@ -528,11 +570,28 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
   }
 
   Future<void> _handleCheckout() async {
+    if (_isProcessing) return;
+
     final cart = ref.read(cartProvider);
     if (cart.items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cart is empty! Add products first.')),
+        const SnackBar(
+          content: Text('Cart is empty! Add products first.'),
+          backgroundColor: AppColors.error,
+        ),
       );
+      return;
+    }
+
+    final isCreditOnly = _selectedPaymentMode == 'Credit';
+    if (isCreditOnly && cart.selectedCustomer == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select or add a customer to give Credit (Udhar)!'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      _showAddCustomerModal();
       return;
     }
 
@@ -550,7 +609,6 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
     final roundingResult = cart.getRoundingResult(loyaltyDiscount, gstAmount: gstAmount);
     final grandTotal = roundingResult.roundedTotal;
 
-    final isCreditOnly = _selectedPaymentMode == 'Credit';
     final cash = isCreditOnly ? 0.0 : (double.tryParse(_cashCtrl.text) ?? 0.0);
     final upi = isCreditOnly ? 0.0 : (double.tryParse(_upiCtrl.text) ?? 0.0);
     final advanceUsed = (cart.useAdvance && !isCreditOnly) ? cart.advanceUsed : 0.0;
@@ -569,17 +627,24 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
 
     final totalPaid = finalCash + finalUpi + advanceUsed;
 
-    // Overpayment handling
+    // Overpayment and change handling
     double allocatedToPreviousDue = 0.0;
     double savedToAdvance = 0.0;
+    double changeToReturn = 0.0;
+
     if (totalPaid > grandTotal) {
       final excess = totalPaid - grandTotal;
-      final prevDue = cart.selectedCustomer?.balanceDue ?? 0.0;
-      if (prevDue > 0) {
-        allocatedToPreviousDue = excess > prevDue ? prevDue : excess;
-        savedToAdvance = excess - allocatedToPreviousDue;
+      if (cart.selectedCustomer != null) {
+        final prevDue = cart.selectedCustomer?.balanceDue ?? 0.0;
+        if (prevDue > 0) {
+          allocatedToPreviousDue = excess > prevDue ? prevDue : excess;
+          savedToAdvance = excess - allocatedToPreviousDue;
+        } else {
+          savedToAdvance = excess;
+        }
       } else {
-        savedToAdvance = excess;
+        // For walk-in customers paying excess cash, calculate change return
+        changeToReturn = excess;
       }
     }
 
@@ -638,7 +703,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
           'grand_total': grandTotal,
           'cash_paid': finalCash,
           'upi_paid': finalUpi,
-          'paid_total': totalPaid,
+          'paid_total': (totalPaid - changeToReturn).clamp(0.0, grandTotal),
           'advance_used': advanceUsed,
           'advance_earned': savedToAdvance,
           'payment_method': paymentMethod,
@@ -669,7 +734,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
         grandTotal: grandTotal,
         cashPaid: finalCash,
         upiPaid: finalUpi,
-        paidTotal: totalPaid,
+        paidTotal: (totalPaid - changeToReturn).clamp(0.0, grandTotal),
         advanceUsed: advanceUsed,
         advanceEarned: savedToAdvance,
         paymentMethod: paymentMethod,
@@ -693,6 +758,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
         settings: settings,
         allocatedToPrevDue: allocatedToPreviousDue,
         savedToAdvance: savedToAdvance,
+        changeToReturn: changeToReturn,
       );
 
       ref.read(cartProvider.notifier).reset();
@@ -709,7 +775,10 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
     required AllSettings settings,
     required double allocatedToPrevDue,
     required double savedToAdvance,
+    double changeToReturn = 0.0,
   }) {
+    final bool isOffline = bill.billNumber.startsWith('OFFLINE');
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -720,17 +789,35 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: AppColors.pastelMint,
+                color: isOffline ? AppColors.pastelAmber : AppColors.pastelMint,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.deepMint),
+                border: Border.all(color: isOffline ? AppColors.deepAmber : AppColors.deepMint),
               ),
-              child: const Icon(Icons.check_circle_rounded, color: AppColors.deepMint, size: 22),
+              child: Icon(
+                isOffline ? Icons.cloud_off_rounded : Icons.check_circle_rounded,
+                color: isOffline ? AppColors.deepAmber : AppColors.deepMint,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                bill.billNumber.startsWith('OFFLINE') ? 'Bill Queued (Offline)' : 'Invoice Generated! 🎉',
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isOffline ? 'Queued Offline' : 'Invoice Generated! 🎉',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                      color: isOffline ? AppColors.deepAmber : AppColors.textPrimary,
+                    ),
+                  ),
+                  if (isOffline)
+                    const Text(
+                      'Pending Cloud Sync (Saved Locally)',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.deepAmber),
+                    ),
+                ],
               ),
             ),
           ],
@@ -745,7 +832,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.background,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: isOffline ? AppColors.deepAmber.withValues(alpha: 0.4) : AppColors.border),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -775,6 +862,28 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                 ),
               ),
               const SizedBox(height: 10),
+
+              if (changeToReturn > 0) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF3B82F6)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.currency_rupee, size: 16, color: Color(0xFF2563EB)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Change to Return: ${Formatters.currency(changeToReturn)}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8)),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
 
               if (allocatedToPrevDue > 0) ...[
                 Container(
@@ -1677,8 +1786,8 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  _addCustomItem();
-                  Navigator.pop(ctx);
+                  final success = _addCustomItem();
+                  if (success) Navigator.pop(ctx);
                 },
                 child: const Text('Add to Cart', style: TextStyle(fontWeight: FontWeight.w800)),
               ),
@@ -1997,7 +2106,13 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                   ),
                   onChanged: (val) {
                     final p = double.tryParse(val) ?? 0.0;
-                    ref.read(cartProvider.notifier).setPercentageDiscount(p);
+                    if (p > 100) {
+                      _percentDiscountCtrl.text = '100';
+                      _percentDiscountCtrl.selection = const TextSelection.collapsed(offset: 3);
+                      ref.read(cartProvider.notifier).setPercentageDiscount(100.0);
+                    } else {
+                      ref.read(cartProvider.notifier).setPercentageDiscount(p);
+                    }
                   },
                 ),
                 const SizedBox(height: 6),

@@ -76,7 +76,8 @@ class CartState {
 
   double get percentDiscountAmount {
     if (percentageDiscount <= 0 || subtotal <= 0) return 0.0;
-    return double.parse(((subtotal * percentageDiscount) / 100).toStringAsFixed(2));
+    final validPercent = percentageDiscount.clamp(0.0, 100.0);
+    return double.parse(((subtotal * validPercent) / 100).toStringAsFixed(2));
   }
 
   double get manualDiscount {

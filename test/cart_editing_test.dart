@@ -190,5 +190,15 @@ void main() {
       final discount = cartNotifier.state.calculateLoyaltyDiscount(loyaltySettings, loyaltyRules);
       expect(discount, 0.0);
     });
+
+    test('Percentage discount clamps to 0-100% even if higher value entered', () {
+      cartNotifier.setPercentageDiscount(150.0);
+      expect(cartNotifier.state.percentageDiscount, 100.0);
+      expect(cartNotifier.state.percentDiscountAmount, 500.0); // 100% of 500
+
+      cartNotifier.setPercentageDiscount(-20.0);
+      expect(cartNotifier.state.percentageDiscount, 0.0);
+      expect(cartNotifier.state.percentDiscountAmount, 0.0);
+    });
   });
 }

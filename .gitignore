@@ -42,3 +42,5 @@ migrate_working_dir/
 
 # Flutter crash logs
 *.log
+# Widget Preview related
+.widget_preview/

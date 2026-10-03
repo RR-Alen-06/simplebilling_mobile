@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -502,12 +503,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
       child: LayoutBuilder(
         builder: (ctx, constraints) {
           final isWide = constraints.maxWidth > 700;
+          final cardWidth = isWide
+              ? math.max(120.0, (constraints.maxWidth - 40) / 6)
+              : math.max(140.0, (constraints.maxWidth - 16) / 2);
+
           return Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               _buildKpiCard(
-                width: isWide ? (constraints.maxWidth - 40) / 6 : (constraints.maxWidth - 16) / 2,
+                width: cardWidth,
                 title: 'Total Sales',
                 value: Formatters.currency(totalSales),
                 subtitle: '$billsCount Bills',
@@ -517,7 +522,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
                 borderColor: AppColors.borderMint,
               ),
               _buildKpiCard(
-                width: isWide ? (constraints.maxWidth - 40) / 6 : (constraints.maxWidth - 16) / 2,
+                width: cardWidth,
                 title: 'Cash Paid',
                 value: Formatters.currency(cashPaid),
                 subtitle: 'Physical Cash',
@@ -527,7 +532,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
                 borderColor: AppColors.borderSky,
               ),
               _buildKpiCard(
-                width: isWide ? (constraints.maxWidth - 40) / 6 : (constraints.maxWidth - 16) / 2,
+                width: cardWidth,
                 title: 'UPI Paid',
                 value: Formatters.currency(upiPaid),
                 subtitle: 'Digital QR',
@@ -537,7 +542,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
                 borderColor: AppColors.borderLavender,
               ),
               _buildKpiCard(
-                width: isWide ? (constraints.maxWidth - 40) / 6 : (constraints.maxWidth - 16) / 2,
+                width: cardWidth,
                 title: 'Pending Balance',
                 value: Formatters.currency(pendingBalance),
                 subtitle: 'Period Dues',
@@ -547,7 +552,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
                 borderColor: AppColors.borderCoral,
               ),
               _buildKpiCard(
-                width: isWide ? (constraints.maxWidth - 40) / 6 : (constraints.maxWidth - 16) / 2,
+                width: cardWidth,
                 title: 'Avg Bill Value',
                 value: Formatters.currency(avgBillValue),
                 subtitle: 'Mean Transaction',
@@ -557,7 +562,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
                 borderColor: AppColors.borderAmber,
               ),
               _buildKpiCard(
-                width: isWide ? (constraints.maxWidth - 40) / 6 : (constraints.maxWidth - 16) / 2,
+                width: cardWidth,
                 title: 'Total Dues (All)',
                 value: Formatters.currency(totalDuesAll),
                 subtitle: 'Store Debt',
