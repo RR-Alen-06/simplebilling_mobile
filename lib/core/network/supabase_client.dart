@@ -5,17 +5,35 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class SupabaseConfig {
   SupabaseConfig._();
 
-  static String get supabaseUrl =>
-      dotenv.env['SUPABASE_URL'] ??
-      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+  static String _safeDotEnv(String key) {
+    try {
+      if (dotenv.isInitialized) {
+        return dotenv.maybeGet(key) ?? '';
+      }
+    } catch (_) {
+      // Ignored - DotEnv not loaded or failed
+    }
+    return '';
+  }
 
-  static String get supabasePublishableKey =>
-      dotenv.env['SUPABASE_PUBLISHABLE_KEY'] ??
-      const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY', defaultValue: '');
+  static String get supabaseUrl {
+    const fromEnv = String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+    if (fromEnv.isNotEmpty) return fromEnv;
+    return _safeDotEnv('SUPABASE_URL');
+  }
+
+  static String get supabasePublishableKey {
+    const fromEnv = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY', defaultValue: '');
+    if (fromEnv.isNotEmpty) return fromEnv;
+    return _safeDotEnv('SUPABASE_PUBLISHABLE_KEY');
+  }
+
+  static bool get isConfigured =>
+      supabaseUrl.isNotEmpty && supabasePublishableKey.isNotEmpty;
 
   static bool get isInitialized {
     try {
-      Supabase.instance;
+      Supabase.instance.client;
       return true;
     } catch (_) {
       return false;
@@ -27,7 +45,7 @@ class SupabaseConfig {
       try {
         await dotenv.load(fileName: '.env');
       } catch (e) {
-        debugPrint('No local .env file found or failed to load, using default config: $e');
+        debugPrint('No local .env file found or failed to load: $e');
       }
 
       final url = supabaseUrl;
@@ -39,11 +57,20 @@ class SupabaseConfig {
           publishableKey: key,
         );
         debugPrint('Supabase initialized successfully in simplebilling_mobile');
+      } else {
+        debugPrint('Supabase credentials not configured (SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY missing).');
       }
     } catch (e) {
       debugPrint('Error initializing Supabase: $e');
     }
   }
 
-  static SupabaseClient get client => Supabase.instance.client;
+  static SupabaseClient get client {
+    if (!isInitialized) {
+      throw StateError(
+        'Supabase is not initialized. Verify credentials or check SupabaseConfig.isInitialized first.',
+      );
+    }
+    return Supabase.instance.client;
+  }
 }

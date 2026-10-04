@@ -30,19 +30,13 @@ jobs:
           cache: true
           cache-key: 'flutter-:os:-:channel:-:version:-:arch:-:hash:'
 
-      - name: Prepare Environment (.env)
+      - name: Validate Secrets
         run: |
-          if [ -n "${{ secrets.SUPABASE_URL }}" ] && [ -n "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" ]; then
-            echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" > .env
-            echo "SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" >> .env
-            echo "Created .env from GitHub repository secrets."
-          elif [ -f .env.example ]; then
-            cp .env.example .env
-            echo "Created .env from .env.example template."
-          else
-            touch .env
-            echo "Created empty .env."
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" ]; then
+            echo "ERROR: SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY secrets must be configured in GitHub repository secrets."
+            exit 1
           fi
+          echo "Supabase secrets validated successfully."
 
       - name: Make Gradle Wrapper Executable
         run: chmod +x android/gradlew
@@ -51,10 +45,16 @@ jobs:
         run: flutter pub get
 
       - name: Build Android Release APK
-        run: flutter build apk --release
+        run: >-
+          flutter build apk --release
+          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Build Android Debug APK
-        run: flutter build apk --debug
+        run: >-
+          flutter build apk --debug
+          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4

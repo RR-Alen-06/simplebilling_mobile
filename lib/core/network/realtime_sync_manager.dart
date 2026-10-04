@@ -15,6 +15,10 @@ class RealtimeSyncManager {
     required VoidCallback onCustomersChanged,
     required VoidCallback onProductsChanged,
   }) {
+    if (!SupabaseConfig.isInitialized) {
+      debugPrint('[RealtimeSyncManager] Supabase is not initialized, skipping realtime subscription.');
+      return;
+    }
     try {
       final client = SupabaseConfig.client;
 

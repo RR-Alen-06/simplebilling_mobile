@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
+import 'package:simplebilling_mobile/core/utils/app_logger.dart';
 import 'package:simplebilling_mobile/data/models/audit_log_model.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/supabase_banner.dart';
@@ -63,7 +64,8 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     try {
       final dt = DateTime.parse(isoString);
       return DateFormat('dd MMM, hh:mm a').format(dt);
-    } catch (_) {
+    } catch (e, stack) {
+      AppLogger.warn('Failed to parse audit timestamp: $isoString', e, stack);
       return isoString.length >= 16 ? isoString.substring(0, 16) : isoString;
     }
   }

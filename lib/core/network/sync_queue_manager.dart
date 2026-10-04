@@ -18,9 +18,11 @@ class SyncQueueManager {
 
   String get _currentQueueKey {
     String uid = 'guest';
-    try {
-      uid = SupabaseConfig.client.auth.currentUser?.id ?? 'guest';
-    } catch (_) {}
+    if (SupabaseConfig.isInitialized) {
+      try {
+        uid = SupabaseConfig.client.auth.currentUser?.id ?? 'guest';
+      } catch (_) {}
+    }
     return 'printpro_sync_queue_$uid';
   }
 
@@ -138,6 +140,7 @@ class SyncQueueManager {
   }
 
   Future<void> processQueue() async {
+    if (!SupabaseConfig.isInitialized) return;
     if (_isProcessing) return;
     _isProcessing = true;
 

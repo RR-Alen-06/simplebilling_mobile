@@ -1,4 +1,5 @@
 import 'package:intl/intl.dart';
+import 'package:simplebilling_mobile/core/utils/app_logger.dart';
 
 class Formatters {
   Formatters._();
@@ -32,7 +33,8 @@ class Formatters {
     try {
       final dt = DateTime.parse(isoString).toLocal();
       return _dateTimeFormat.format(dt);
-    } catch (_) {
+    } catch (e, stack) {
+      AppLogger.warn('Failed to parse date: $isoString', e, stack);
       return isoString;
     }
   }

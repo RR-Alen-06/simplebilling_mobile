@@ -1,8 +1,7 @@
-import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
-import 'package:simplebilling_mobile/core/constants/app_theme.dart';
 import 'package:simplebilling_mobile/core/network/sync_queue_manager.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
 import 'package:simplebilling_mobile/data/models/bill_model.dart';
@@ -10,10 +9,15 @@ import 'package:simplebilling_mobile/data/models/customer_model.dart';
 import 'package:simplebilling_mobile/data/models/product_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 import 'package:simplebilling_mobile/data/repositories/api_repository.dart';
-import 'package:simplebilling_mobile/providers/billing_provider.dart';
+import 'package:simplebilling_mobile/presentation/screens/billing/widgets/billing_dialogs.dart';
+import 'package:simplebilling_mobile/presentation/screens/billing/widgets/billing_step_header.dart';
+import 'package:simplebilling_mobile/presentation/screens/billing/widgets/customer_discount_step.dart';
+import 'package:simplebilling_mobile/presentation/screens/billing/widgets/items_catalog_step.dart';
+import 'package:simplebilling_mobile/presentation/screens/billing/widgets/payment_settlement_step.dart';
 import 'package:simplebilling_mobile/presentation/shared/printing/receipt_generator.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/barcode_scanner_modal.dart';
 import 'package:simplebilling_mobile/presentation/shared/widgets/invoice_modal.dart';
+import 'package:simplebilling_mobile/providers/billing_provider.dart';
 
 class BillingScreen extends ConsumerStatefulWidget {
   const BillingScreen({super.key});
@@ -26,7 +30,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
   int _currentStep = 0; // 0: Items, 1: Customer & Discounts, 2: Payment
   bool _isCartExpanded = true;
 
-  // Custom Item entry
+  // Custom Item entry controllers
   final TextEditingController _customNameCtrl = TextEditingController(text: 'A4 B&W Single');
   final TextEditingController _customQtyCtrl = TextEditingController(text: '1');
   final TextEditingController _customPriceCtrl = TextEditingController(text: '2.00');
@@ -44,373 +48,6 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
   String _selectedPaymentMode = 'Cash'; // Cash, UPI, Card, Credit, Split
 
   bool _isProcessing = false;
-
-  void _showEditQuantityDialog(int itemIndex, BillItemModel item) {
-    final qtyCtrl = TextEditingController(
-      text: item.quantity % 1 == 0 ? item.quantity.toInt().toString() : item.quantity.toString(),
-    );
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(Icons.edit_note_rounded, color: AppColors.primaryEmerald),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Edit Qty: ${item.productName}',
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter exact quantity (e.g. 250 copies, 1.5 units). Enter 0 to remove item.',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: qtyCtrl,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Quantity',
-                hintText: 'e.g. 10',
-                prefixIcon: Icon(Icons.pin_outlined),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryEmerald,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              final newQty = double.tryParse(qtyCtrl.text.trim());
-              if (newQty == null || newQty < 0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter a valid quantity (0 or greater)'),
-                    backgroundColor: AppColors.error,
-                  ),
-                );
-                return;
-              }
-              ref.read(cartProvider.notifier).updateItemQuantity(itemIndex, newQty);
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Update'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showEditPriceDialog(int itemIndex, BillItemModel item) {
-    final priceCtrl = TextEditingController(
-      text: item.price % 1 == 0 ? item.price.toInt().toString() : item.price.toStringAsFixed(2),
-    );
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(Icons.price_change_outlined, color: AppColors.primaryEmerald),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Edit Unit Price: ${item.productName}',
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter new unit price per item/page.',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: priceCtrl,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Unit Price (₹)',
-                hintText: 'e.g. 2.50',
-                prefixIcon: Icon(Icons.currency_rupee),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryEmerald,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              final newPrice = double.tryParse(priceCtrl.text.trim());
-              if (newPrice == null || newPrice < 0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter a valid unit price (0 or greater)'),
-                    backgroundColor: AppColors.error,
-                  ),
-                );
-                return;
-              }
-              ref.read(cartProvider.notifier).updateItemPrice(itemIndex, newPrice);
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Update Price'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showRedeemLoyaltyDialog(CustomerModel customer, LoyaltySettings settings, List<LoyaltyRedemptionRule> rules) {
-    final cart = ref.read(cartProvider);
-    final ptsCtrl = TextEditingController(
-      text: cart.pointsToRedeem > 0
-          ? (cart.pointsToRedeem % 1 == 0 ? cart.pointsToRedeem.toInt().toString() : cart.pointsToRedeem.toString())
-          : '',
-    );
-
-    double currentEnteredPoints = cart.pointsToRedeem;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) {
-          final discountPreview = ApiRepository.calculateLoyaltyDiscount(
-            currentEnteredPoints,
-            settings,
-            rules,
-          );
-
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.stars_rounded, color: AppColors.primaryDark, size: 20),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Redeem Loyalty Points',
-                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                      ),
-                      Text(
-                        'Customer: ${customer.name}',
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Available Points Card
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Available Balance:',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                        ),
-                        Text(
-                          '${customer.loyaltyPoints.toInt()} pts',
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.primaryDark),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Conversion rules hint
-                  if (rules.isNotEmpty)
-                    Text(
-                      'Rules: ${rules.where((r) => r.enabled).map((r) => "${r.pointsRequired.toInt()} pts = ₹${r.discountAmount.toStringAsFixed(0)}").join(" • ")}',
-                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                    )
-                  else
-                    Text(
-                      'Rate: ${settings.pointsRequired.toInt()} pts = ₹${settings.discountValue.toStringAsFixed(0)} discount',
-                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                    ),
-                  const SizedBox(height: 10),
-
-                  // Numeric Points Input
-                  TextField(
-                    controller: ptsCtrl,
-                    autofocus: true,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Points to Redeem',
-                      hintText: 'e.g. 50',
-                      prefixIcon: Icon(Icons.stars_outlined, size: 18),
-                      suffixText: 'pts',
-                    ),
-                    onChanged: (val) {
-                      final p = double.tryParse(val.trim()) ?? 0.0;
-                      setModalState(() {
-                        currentEnteredPoints = p.clamp(0.0, customer.loyaltyPoints);
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Shortcut Chips: 25%, 50%, Max, Clear
-                  Wrap(
-                    spacing: 6,
-                    children: [
-                      ActionChip(
-                        label: const Text('25%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                        backgroundColor: AppColors.surfaceVariant,
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () {
-                          final p = (customer.loyaltyPoints * 0.25).floorToDouble();
-                          ptsCtrl.text = p.toInt().toString();
-                          setModalState(() => currentEnteredPoints = p);
-                        },
-                      ),
-                      ActionChip(
-                        label: const Text('50%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                        backgroundColor: AppColors.surfaceVariant,
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () {
-                          final p = (customer.loyaltyPoints * 0.50).floorToDouble();
-                          ptsCtrl.text = p.toInt().toString();
-                          setModalState(() => currentEnteredPoints = p);
-                        },
-                      ),
-                      ActionChip(
-                        label: const Text('Max', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                        backgroundColor: AppColors.primaryContainer,
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () {
-                          final p = customer.loyaltyPoints;
-                          ptsCtrl.text = p.toInt().toString();
-                          setModalState(() => currentEnteredPoints = p);
-                        },
-                      ),
-                      ActionChip(
-                        label: const Text('Clear', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.error)),
-                        backgroundColor: AppColors.surfaceVariant,
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () {
-                          ptsCtrl.clear();
-                          setModalState(() => currentEnteredPoints = 0.0);
-                        },
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Live Discount Preview Banner
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: discountPreview > 0 ? AppColors.pastelMint : AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: discountPreview > 0 ? AppColors.borderMint : AppColors.border,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Discount Value:',
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-                        ),
-                        Text(
-                          discountPreview > 0 ? '-₹${discountPreview.toStringAsFixed(2)} OFF' : '₹0.00',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 14,
-                            color: discountPreview > 0 ? AppColors.deepMint : AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryEmerald,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () {
-                  final entered = double.tryParse(ptsCtrl.text.trim()) ?? 0.0;
-                  final validPts = entered.clamp(0.0, customer.loyaltyPoints);
-                  ref.read(cartProvider.notifier).setPointsToRedeem(validPts);
-                  Navigator.of(ctx).pop();
-                },
-                child: const Text('Apply Discount'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
 
   @override
   void dispose() {
@@ -435,11 +72,7 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
     );
   }
 
-  bool _addCustomItem() {
-    final name = _customNameCtrl.text.trim();
-    final qty = double.tryParse(_customQtyCtrl.text);
-    final price = double.tryParse(_customPriceCtrl.text);
-
+  bool _addCustomItemDirect(String name, double? qty, double? price) {
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -498,77 +131,6 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
     );
   }
 
-  void _showAddCustomerModal() {
-    final nameCtrl = TextEditingController();
-    final mobileCtrl = TextEditingController();
-    final emailCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.person_add_rounded, color: AppColors.primaryEmerald),
-            SizedBox(width: 8),
-            Text('Quick Add Customer', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Customer Name *', hintText: 'Enter full name'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: mobileCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Mobile Number', hintText: '10-digit phone'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email Address', hintText: 'Optional email'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryEmerald,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              if (nameCtrl.text.trim().isEmpty) return;
-              final newCust = await ApiRepository.createCustomer(
-                nameCtrl.text.trim(),
-                mobileCtrl.text.trim().isEmpty ? null : mobileCtrl.text.trim(),
-                email: emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
-              );
-              if (newCust != null) {
-                ref.invalidate(customersProvider);
-                ref.invalidate(customerSummariesProvider);
-                ref.read(cartProvider.notifier).selectCustomer(newCust);
-              }
-              if (ctx.mounted) Navigator.of(ctx).pop();
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Customer ${nameCtrl.text.trim()} registered & selected! 🎉')),
-              );
-            },
-            child: const Text('Save & Select', style: TextStyle(fontWeight: FontWeight.w800)),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _handleCheckout() async {
     if (_isProcessing) return;
 
@@ -591,11 +153,12 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
           backgroundColor: AppColors.error,
         ),
       );
-      _showAddCustomerModal();
+      BillingDialogs.showAddCustomerModal(context: context, ref: ref);
       return;
     }
 
-    final settings = ref.read(settingsProvider).value ?? AllSettings(
+    final settings = ref.read(settingsProvider).value ??
+        AllSettings(
           shop: ShopSettings(),
           billing: BillingSettings(),
           loyalty: LoyaltySettings(),
@@ -643,7 +206,6 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
           savedToAdvance = excess;
         }
       } else {
-        // For walk-in customers paying excess cash, calculate change return
         changeToReturn = excess;
       }
     }
@@ -862,7 +424,6 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-
               if (changeToReturn > 0) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
@@ -884,7 +445,6 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                 ),
                 const SizedBox(height: 6),
               ],
-
               if (allocatedToPrevDue > 0) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -921,7 +481,6 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                 ),
                 const SizedBox(height: 6),
               ],
-
               if (bill.loyaltyPointsEarned > 0 || bill.loyaltyPointsRedeemed > 0) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -946,10 +505,8 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
                 ),
                 const SizedBox(height: 6),
               ],
-
               const Text('Print & Distribution Hub:', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
               const SizedBox(height: 8),
-
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -1031,15 +588,21 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
                 color: AppColors.primaryContainer,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.point_of_sale, color: AppColors.primaryDark, size: 20),
+              child: const Icon(Icons.point_of_sale, color: AppColors.primaryDark, size: 18),
             ),
-            const SizedBox(width: 10),
-            const Text('POS Billing Wizard', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            const SizedBox(width: 8),
+            const Flexible(
+              child: Text(
+                'POS Billing Wizard',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         actions: [
@@ -1063,10 +626,10 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
       ),
       body: Column(
         children: [
-          // Multi-Step Progress Indicator
-          _buildStepProgressHeader(),
-
-          // Step Content
+          BillingStepHeader(
+            currentStep: _currentStep,
+            onStepSelected: (step) => setState(() => _currentStep = step),
+          ),
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
@@ -1078,1487 +641,84 @@ class _BillingScreenState extends ConsumerState<BillingScreen> {
     );
   }
 
-  // --- Step 1, 2, 3 Wizard Header ---
-  Widget _buildStepProgressHeader() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          _buildStepPill(0, '1. Items & Cart', Icons.shopping_basket_outlined),
-          const SizedBox(width: 6),
-          Expanded(child: Container(height: 2, color: _currentStep >= 1 ? AppColors.primaryEmerald : AppColors.border)),
-          const SizedBox(width: 6),
-          _buildStepPill(1, '2. Customer', Icons.person_outline),
-          const SizedBox(width: 6),
-          Expanded(child: Container(height: 2, color: _currentStep >= 2 ? AppColors.primaryEmerald : AppColors.border)),
-          const SizedBox(width: 6),
-          _buildStepPill(2, '3. Payment', Icons.payments_outlined),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepPill(int stepIndex, String title, IconData icon) {
-    final isActive = _currentStep == stepIndex;
-    final isCompleted = _currentStep > stepIndex;
-
-    return InkWell(
-      onTap: () {
-        if (isCompleted || stepIndex < _currentStep) {
-          setState(() => _currentStep = stepIndex);
-        }
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive
-              ? AppColors.primaryContainer
-              : isCompleted
-                  ? AppColors.pastelMint
-                  : AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive
-                ? AppColors.primaryEmerald
-                : isCompleted
-                    ? AppColors.borderMint
-                    : AppColors.border,
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isCompleted ? Icons.check_circle : icon,
-              size: 15,
-              color: isActive
-                  ? AppColors.primaryDark
-                  : isCompleted
-                      ? AppColors.deepMint
-                      : AppColors.textSecondary,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-                color: isActive
-                    ? AppColors.primaryDark
-                    : isCompleted
-                        ? AppColors.deepMint
-                        : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCurrentStepView(CartState cart, AsyncValue<List<ProductModel>> productsAsync, AsyncValue<List<CustomerModel>> customersAsync) {
+  Widget _buildCurrentStepView(
+    CartState cart,
+    AsyncValue<List<ProductModel>> productsAsync,
+    AsyncValue<List<CustomerModel>> customersAsync,
+  ) {
     switch (_currentStep) {
       case 0:
-        return _buildStep1ItemsCatalog(cart, productsAsync, customersAsync);
+        return ItemsCatalogStep(
+          cart: cart,
+          products: productsAsync.value ?? [],
+          searchCtrl: _searchCtrl,
+          searchQuery: _searchQuery,
+          selectedCategory: _selectedCategory,
+          isCartExpanded: _isCartExpanded,
+          onToggleCartExpand: () => setState(() => _isCartExpanded = !_isCartExpanded),
+          onCategorySelected: (cat) => setState(() => _selectedCategory = cat),
+          onSearchChanged: (val) => setState(() => _searchQuery = val.trim()),
+          onClearSearch: () {
+            _searchCtrl.clear();
+            setState(() => _searchQuery = '');
+          },
+          onShowCustomItem: () => BillingDialogs.showCustomItemSheet(
+            context: context,
+            ref: ref,
+            customNameCtrl: _customNameCtrl,
+            customQtyCtrl: _customQtyCtrl,
+            customPriceCtrl: _customPriceCtrl,
+            onAddCustomItem: _addCustomItemDirect,
+          ),
+          onAddQuickPreset: _addQuickPreset,
+          onProceedToCustomer: () => setState(() => _currentStep = 1),
+          onEditQuantity: (itemIndex, item) => BillingDialogs.showEditQuantityDialog(
+            context: context,
+            ref: ref,
+            itemIndex: itemIndex,
+            item: item,
+          ),
+          onEditPrice: (itemIndex, item) => BillingDialogs.showEditPriceDialog(
+            context: context,
+            ref: ref,
+            itemIndex: itemIndex,
+            item: item,
+          ),
+          ref: ref,
+        );
       case 1:
-        return _buildStep2CustomerDiscounts(cart, customersAsync);
+        return CustomerDiscountStep(
+          cart: cart,
+          customers: customersAsync.value ?? [],
+          percentDiscountCtrl: _percentDiscountCtrl,
+          flatDiscountCtrl: _flatDiscountCtrl,
+          onAddCustomer: () => BillingDialogs.showAddCustomerModal(context: context, ref: ref),
+          onRedeemLoyalty: (customer, settings, rules) => BillingDialogs.showRedeemLoyaltyDialog(
+            context: context,
+            ref: ref,
+            customer: customer,
+            settings: settings,
+            rules: rules,
+          ),
+          onBackToItems: () => setState(() => _currentStep = 0),
+          onProceedToPayment: () => setState(() => _currentStep = 2),
+          ref: ref,
+        );
       case 2:
-        return _buildStep3PaymentSettlement(cart);
+        return PaymentSettlementStep(
+          cart: cart,
+          selectedPaymentMode: _selectedPaymentMode,
+          onPaymentModeChanged: (mode) => setState(() => _selectedPaymentMode = mode),
+          cashCtrl: _cashCtrl,
+          upiCtrl: _upiCtrl,
+          isProcessing: _isProcessing,
+          onBackToDiscounts: () => setState(() => _currentStep = 1),
+          onCheckout: _handleCheckout,
+          onStateChanged: () => setState(() {}),
+          ref: ref,
+        );
       default:
         return const SizedBox.shrink();
     }
-  }
-
-  // ==========================================
-  // STEP 1: Items, Quick Presets & Cart
-  // ==========================================
-  Widget _buildStep1ItemsCatalog(CartState cart, AsyncValue<List<ProductModel>> productsAsync, AsyncValue<List<CustomerModel>> customersAsync) {
-    final products = productsAsync.value ?? [];
-    final categories = ['All', ...{for (var p in products) p.category}];
-
-    final filteredProducts = products.where((p) {
-      final matchesCat = _selectedCategory == 'All' || p.category == _selectedCategory;
-      final matchesSearch = _searchQuery.isEmpty ||
-          p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          (p.productCode?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false);
-      return matchesCat && matchesSearch;
-    }).toList();
-
-    return Column(
-      children: [
-        // Collapsible Active Cart Section
-        if (cart.items.isNotEmpty)
-          Container(
-            margin: const EdgeInsets.fromLTRB(14, 8, 14, 4),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.borderMint, width: 1.2),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryEmerald.withValues(alpha: 0.06),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                InkWell(
-                  onTap: () => setState(() => _isCartExpanded = !_isCartExpanded),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                            color: AppColors.pastelMint,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.shopping_cart_outlined, color: AppColors.deepMint, size: 16),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Active Cart (${cart.items.length})',
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.textPrimary),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryContainer,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            Formatters.currency(cart.subtotal),
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primaryDark),
-                          ),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            foregroundColor: AppColors.error,
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                          ),
-                          onPressed: () => ref.read(cartProvider.notifier).reset(),
-                          child: const Text('Clear', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                        ),
-                        Icon(
-                          _isCartExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                          color: AppColors.textSecondary,
-                          size: 20,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (_isCartExpanded) ...[
-                  const Divider(height: 1, color: AppColors.border),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 180),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      itemCount: cart.items.length,
-                      separatorBuilder: (ctx, i) => const Divider(height: 8, color: AppColors.surfaceVariant),
-                      itemBuilder: (ctx, itemIdx) {
-                        final item = cart.items[itemIdx];
-                        final origProd = item.productId != null
-                            ? products.where((p) => p.id == item.productId).firstOrNull
-                            : null;
-                        final isCustomPrice = origProd != null && (origProd.price - item.price).abs() > 0.001;
-                        final qtyDisplay = item.quantity % 1 == 0
-                            ? item.quantity.toInt().toString()
-                            : item.quantity.toString();
-
-                        return Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.productName,
-                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textPrimary),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Row(
-                                    children: [
-                                      // Tap to edit price
-                                      InkWell(
-                                        onTap: () => _showEditPriceDialog(itemIdx, item),
-                                        borderRadius: BorderRadius.circular(4),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: isCustomPrice ? AppColors.pastelAmber : AppColors.surfaceVariant,
-                                            borderRadius: BorderRadius.circular(4),
-                                            border: Border.all(
-                                              color: isCustomPrice ? AppColors.deepAmber : AppColors.border,
-                                              width: 0.8,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                '@ ₹${item.price % 1 == 0 ? item.price.toInt() : item.price.toStringAsFixed(2)}',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: isCustomPrice ? AppColors.deepAmber : AppColors.textPrimary,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 3),
-                                              Icon(
-                                                Icons.edit,
-                                                size: 10,
-                                                color: isCustomPrice ? AppColors.deepAmber : AppColors.textSecondary,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      if (isCustomPrice) ...[
-                                        const SizedBox(width: 4),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.pastelAmber,
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: const Text(
-                                            'Custom Rate',
-                                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.deepAmber),
-                                          ),
-                                        ),
-                                      ],
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        '= ₹${item.total.toStringAsFixed(2)}',
-                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primaryEmerald),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Quantity Controls
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                InkWell(
-                                  onTap: () => ref.read(cartProvider.notifier).decrementQuantity(itemIdx),
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: const Padding(
-                                    padding: EdgeInsets.all(4),
-                                    child: Icon(Icons.remove_circle_outline, color: AppColors.error, size: 18),
-                                  ),
-                                ),
-                                // Tap to edit quantity
-                                InkWell(
-                                  onTap: () => _showEditQuantityDialog(itemIdx, item),
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primaryContainer,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: AppColors.primaryEmerald.withValues(alpha: 0.4)),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          qtyDisplay,
-                                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primaryDark),
-                                        ),
-                                        const SizedBox(width: 2),
-                                        const Icon(Icons.edit, size: 10, color: AppColors.primaryDark),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                InkWell(
-                                  onTap: () => ref.read(cartProvider.notifier).incrementQuantity(itemIdx),
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: const Padding(
-                                    padding: EdgeInsets.all(4),
-                                    child: Icon(Icons.add_circle, color: AppColors.primaryEmerald, size: 18),
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                InkWell(
-                                  onTap: () => ref.read(cartProvider.notifier).removeItem(itemIdx),
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: const Padding(
-                                    padding: EdgeInsets.all(4),
-                                    child: Icon(Icons.close, color: AppColors.textMuted, size: 16),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-        // Quick Search & Action Bar
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'Search products or scan SKU...',
-                    prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
-                    suffixIcon: _searchCtrl.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, size: 18),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                  ),
-                  onChanged: (val) => setState(() => _searchQuery = val.trim()),
-                ),
-              ),
-              const SizedBox(width: 8),
-              InkWell(
-                onTap: _showCustomItemSheet,
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.border, width: 1.2),
-                  ),
-                  child: const Icon(Icons.playlist_add, color: AppColors.secondaryIndigo, size: 22),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Category Chips
-        SizedBox(
-          height: 38,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            scrollDirection: Axis.horizontal,
-            itemCount: categories.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 6),
-            itemBuilder: (ctx, i) {
-              final cat = categories[i];
-              final isSelected = _selectedCategory == cat;
-              return ChoiceChip(
-                label: Text(cat, style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)),
-                selected: isSelected,
-                selectedColor: AppColors.primaryContainer,
-                backgroundColor: Colors.white,
-                side: BorderSide(color: isSelected ? AppColors.primaryEmerald : AppColors.border),
-                onSelected: (sel) => setState(() => _selectedCategory = cat),
-              );
-            },
-          ),
-        ),
-
-        const SizedBox(height: 6),
-
-        // Quick Preset Buttons Grid (Xerox & Common services)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            children: [
-              Expanded(child: _buildPresetCard('A4 B&W', '₹2.00', () => _addQuickPreset('A4 B&W Xerox', 2.0))),
-              const SizedBox(width: 6),
-              Expanded(child: _buildPresetCard('A4 Color', '₹10.00', () => _addQuickPreset('A4 Color Xerox', 10.0))),
-              const SizedBox(width: 6),
-              Expanded(child: _buildPresetCard('Spiral', '₹40.00', () => _addQuickPreset('Spiral Binding', 40.0))),
-              const SizedBox(width: 6),
-              Expanded(child: _buildPresetCard('Laminate', '₹25.00', () => _addQuickPreset('A4 Lamination', 25.0))),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 8),
-
-        // Products List
-        Expanded(
-          child: filteredProducts.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.inventory_2_outlined, size: 48, color: AppColors.textMuted.withValues(alpha: 0.6)),
-                      const SizedBox(height: 10),
-                      const Text('No products found', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-                      const SizedBox(height: 4),
-                      TextButton.icon(
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Add Custom Item to Cart'),
-                        onPressed: _showCustomItemSheet,
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 80),
-                  itemCount: filteredProducts.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 8),
-                  itemBuilder: (ctx, idx) {
-                    final prod = filteredProducts[idx];
-                    final cartIndex = cart.items.indexWhere(
-                      (it) => (it.productId != null && it.productId == prod.id) || it.productName == prod.name,
-                    );
-                    final cartItem = cartIndex >= 0 ? cart.items[cartIndex] : null;
-
-                    final isCustomPrice = cartItem != null && (cartItem.price - prod.price).abs() > 0.001;
-                    final qtyDisplay = cartItem != null
-                        ? (cartItem.quantity % 1 == 0 ? cartItem.quantity.toInt().toString() : cartItem.quantity.toString())
-                        : '0';
-
-                    return Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: AppTheme.tactileCardDecoration(),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceVariant,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Center(
-                              child: Icon(Icons.shopping_bag_outlined, color: AppColors.primaryDark, size: 22),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  prod.name,
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textPrimary),
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  children: [
-                                    Text(
-                                      Formatters.currency(cartItem != null ? cartItem.price : prod.price),
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 13,
-                                        color: isCustomPrice ? AppColors.deepAmber : AppColors.primaryEmerald,
-                                      ),
-                                    ),
-                                    if (isCustomPrice) ...[
-                                      const SizedBox(width: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.pastelAmber,
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: const Text(
-                                          'Custom',
-                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.deepAmber),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (cartItem != null) ...[
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline, color: AppColors.error, size: 22),
-                                  onPressed: () => ref.read(cartProvider.notifier).decrementQuantity(cartIndex),
-                                ),
-                                // Tap to edit quantity in catalog list
-                                InkWell(
-                                  onTap: () => _showEditQuantityDialog(cartIndex, cartItem),
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primaryContainer,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: AppColors.primaryEmerald.withValues(alpha: 0.4)),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          qtyDisplay,
-                                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.primaryDark),
-                                        ),
-                                        const SizedBox(width: 2),
-                                        const Icon(Icons.edit, size: 10, color: AppColors.primaryDark),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle, color: AppColors.primaryEmerald, size: 22),
-                                  onPressed: () => ref.read(cartProvider.notifier).incrementQuantity(cartIndex),
-                                ),
-                              ],
-                            ),
-                          ] else ...[
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                minimumSize: Size.zero,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              onPressed: () => ref.read(cartProvider.notifier).addItem(prod.name, prod.price, 1, productId: prod.id),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.add, size: 16),
-                                  SizedBox(width: 4),
-                                  Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    );
-                  },
-                ),
-        ),
-
-        // Floating Sticky Bottom Summary Bar
-        _buildStep1FloatingDock(cart),
-      ],
-    );
-  }
-
-  Widget _buildPresetCard(String title, String price, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          children: [
-            Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-            const SizedBox(height: 2),
-            Text(price, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primaryEmerald)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStep1FloatingDock(CartState cart) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(top: BorderSide(color: AppColors.border, width: 1.2)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.textPrimary.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${cart.items.length} Items Selected',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                ),
-                Text(
-                  Formatters.currency(cart.subtotal),
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
-                ),
-              ],
-            ),
-            const Spacer(),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: cart.items.isEmpty ? AppColors.textMuted : AppColors.primaryEmerald,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-              onPressed: cart.items.isEmpty
-                  ? null
-                  : () {
-                      setState(() => _currentStep = 1);
-                    },
-              child: const Row(
-                children: [
-                  Text('Proceed to Customer', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
-                  SizedBox(width: 6),
-                  Icon(Icons.arrow_forward_rounded, size: 18),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showCustomItemSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Add Custom Item / Xerox Spec', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _customNameCtrl,
-              decoration: const InputDecoration(labelText: 'Item / Service Name', hintText: 'e.g. A3 Color Print'),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _customQtyCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Quantity', hintText: '1'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _customPriceCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Unit Price (₹)', hintText: '2.00'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  final success = _addCustomItem();
-                  if (success) Navigator.pop(ctx);
-                },
-                child: const Text('Add to Cart', style: TextStyle(fontWeight: FontWeight.w800)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ==========================================
-  // STEP 2: Customer Selection & Discounts
-  // ==========================================
-  Widget _buildStep2CustomerDiscounts(CartState cart, AsyncValue<List<CustomerModel>> customersAsync) {
-    final customers = customersAsync.value ?? [];
-    final settings = ref.watch(settingsProvider).value ?? AllSettings(
-          shop: ShopSettings(),
-          billing: BillingSettings(),
-          loyalty: LoyaltySettings(),
-        );
-    final loyaltyRules = ref.watch(loyaltyRulesProvider).value ?? [];
-    final loyaltyDiscount = cart.calculateLoyaltyDiscount(settings.loyalty, loyaltyRules);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Selected Customer Card / Selector
-          const Text('Customer Account', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: AppTheme.tactileCardDecoration(elevated: true),
-            child: Column(
-              children: [
-                if (cart.selectedCustomer != null) ...[
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.pastelMint,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(Icons.person, color: AppColors.deepMint, size: 24),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              cart.selectedCustomer!.name,
-                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textPrimary),
-                            ),
-                            Text(
-                              cart.selectedCustomer!.mobile ?? 'No phone recorded',
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: AppColors.textMuted),
-                        onPressed: () => ref.read(cartProvider.notifier).selectCustomer(null),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  // Badges: Pending Due, Loyalty Balance, Advance Wallet
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      if (cart.selectedCustomer!.balanceDue > 0)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEE2E2),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.5)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFDC2626)),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Pending Due: ${Formatters.currency(cart.selectedCustomer!.balanceDue)}',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFDC2626)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEDE9FE),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.4)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.stars_rounded, size: 13, color: Color(0xFF7C3AED)),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Loyalty: ${cart.selectedCustomer!.loyaltyPoints.toInt()} pts',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF6D28D9)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (cart.selectedCustomer!.advanceBalance > 0)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.pastelMint,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: AppColors.borderMint),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.account_balance_wallet_outlined, size: 13, color: AppColors.deepMint),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Advance: ${Formatters.currency(cart.selectedCustomer!.advanceBalance)}',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.deepMint),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (cart.selectedCustomer!.loyaltyPoints > 0 && settings.loyalty.enabled) ...[
-                    const SizedBox(height: 10),
-                    if (cart.pointsToRedeem > 0)
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.pastelMint,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.borderMint),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.stars_rounded, color: AppColors.deepMint, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Redeeming ${cart.pointsToRedeem.toInt()} pts (-₹${loyaltyDiscount.toStringAsFixed(2)})',
-                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: AppColors.deepMint),
-                                  ),
-                                  const Text(
-                                    'Loyalty discount applied to bill',
-                                    style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            TextButton(
-                              style: TextButton.styleFrom(
-                                visualDensity: VisualDensity.compact,
-                                padding: const EdgeInsets.symmetric(horizontal: 6),
-                              ),
-                              onPressed: () => _showRedeemLoyaltyDialog(cart.selectedCustomer!, settings.loyalty, loyaltyRules),
-                              child: const Text('Edit', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close, size: 16, color: AppColors.textMuted),
-                              onPressed: () => ref.read(cartProvider.notifier).clearPointsToRedeem(),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF6D28D9),
-                            side: const BorderSide(color: Color(0xFFC4B5FD)),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          icon: const Icon(Icons.stars_rounded, size: 18),
-                          label: Text(
-                            'Redeem Loyalty Points (${cart.selectedCustomer!.loyaltyPoints.toInt()} Available)',
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-                          ),
-                          onPressed: () => _showRedeemLoyaltyDialog(cart.selectedCustomer!, settings.loyalty, loyaltyRules),
-                        ),
-                      ),
-                  ],
-                ] else ...[
-                  Row(
-                    children: [
-                      const Icon(Icons.person_outline, color: AppColors.textSecondary, size: 24),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          'Walk-in / Cash Customer',
-                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                        ),
-                      ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.person_add, size: 16),
-                        label: const Text('New'),
-                        onPressed: _showAddCustomerModal,
-                      ),
-                    ],
-                  ),
-                ],
-                const Divider(height: 20),
-                // Customer search autocomplete
-                Autocomplete<CustomerModel>(
-                  displayStringForOption: (c) => '${c.name} (${c.mobile ?? "No phone"})',
-                  optionsBuilder: (textVal) {
-                    if (textVal.text.isEmpty) return const Iterable<CustomerModel>.empty();
-                    return customers.where((c) =>
-                        c.name.toLowerCase().contains(textVal.text.toLowerCase()) ||
-                        (c.mobile?.contains(textVal.text) ?? false));
-                  },
-                  onSelected: (cust) => ref.read(cartProvider.notifier).selectCustomer(cust),
-                  fieldViewBuilder: (ctx, ctrl, focus, onSub) {
-                    return TextField(
-                      controller: ctrl,
-                      focusNode: focus,
-                      decoration: const InputDecoration(
-                        hintText: 'Search customer name or phone...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Discounts Section
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Discount & Pricing Adjustments', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-              if (cart.percentageDiscount > 0 || cart.flatDiscount > 0)
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: AppColors.error,
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                  ),
-                  icon: const Icon(Icons.clear, size: 14),
-                  label: const Text('Clear All', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                  onPressed: () {
-                    _percentDiscountCtrl.clear();
-                    _flatDiscountCtrl.clear();
-                    ref.read(cartProvider.notifier).clearDiscounts();
-                  },
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: AppTheme.tactileCardDecoration(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. Percentage Discount Field
-                Row(
-                  children: [
-                    const Icon(Icons.percent_rounded, size: 18, color: AppColors.primaryEmerald),
-                    const SizedBox(width: 8),
-                    const Text('Percentage Discount (%)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                    const Spacer(),
-                    if (cart.percentageDiscount > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryContainer,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '= -${Formatters.currency(cart.percentDiscountAmount)}',
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primaryDark),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _percentDiscountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    hintText: 'e.g. 10 (for 10% off)',
-                    prefixIcon: const Icon(Icons.discount_outlined, size: 18),
-                    suffixText: '%',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    suffixIcon: _percentDiscountCtrl.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, size: 16),
-                            onPressed: () {
-                              _percentDiscountCtrl.clear();
-                              ref.read(cartProvider.notifier).setPercentageDiscount(0.0);
-                            },
-                          )
-                        : null,
-                  ),
-                  onChanged: (val) {
-                    final p = double.tryParse(val) ?? 0.0;
-                    if (p > 100) {
-                      _percentDiscountCtrl.text = '100';
-                      _percentDiscountCtrl.selection = const TextSelection.collapsed(offset: 3);
-                      ref.read(cartProvider.notifier).setPercentageDiscount(100.0);
-                    } else {
-                      ref.read(cartProvider.notifier).setPercentageDiscount(p);
-                    }
-                  },
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  children: [
-                    _buildPercentChip('0%', 0),
-                    _buildPercentChip('5%', 5),
-                    _buildPercentChip('10%', 10),
-                    _buildPercentChip('15%', 15),
-                    _buildPercentChip('20%', 20),
-                  ],
-                ),
-
-                const Divider(height: 24),
-
-                // 2. Flat Discount Field
-                Row(
-                  children: [
-                    const Icon(Icons.currency_rupee, size: 18, color: AppColors.primaryEmerald),
-                    const SizedBox(width: 8),
-                    const Text('Flat Discount (₹)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                    const Spacer(),
-                    if (cart.flatDiscount > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryContainer,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '= -${Formatters.currency(cart.flatDiscount)}',
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primaryDark),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _flatDiscountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    hintText: '0.00',
-                    prefixIcon: const Icon(Icons.money_off_csred_outlined, size: 18),
-                    prefixText: '₹ ',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    suffixIcon: _flatDiscountCtrl.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, size: 16),
-                            onPressed: () {
-                              _flatDiscountCtrl.clear();
-                              ref.read(cartProvider.notifier).setFlatDiscount(0.0);
-                            },
-                          )
-                        : null,
-                  ),
-                  onChanged: (val) {
-                    final d = double.tryParse(val) ?? 0.0;
-                    ref.read(cartProvider.notifier).setFlatDiscount(d);
-                  },
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  children: [
-                    _buildFlatChip('₹0', 0),
-                    _buildFlatChip('₹20', 20),
-                    _buildFlatChip('₹50', 50),
-                    _buildFlatChip('₹100', 100),
-                    _buildFlatChip('₹200', 200),
-                  ],
-                ),
-
-                if (cart.manualDiscount > 0) ...[
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.pastelMint,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.borderMint),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle_outline, color: AppColors.deepMint, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Total Discount Applied: ${Formatters.currency(cart.manualDiscount)}',
-                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: AppColors.deepMint),
-                              ),
-                              Text(
-                                '${cart.percentageDiscount > 0 ? "${cart.percentageDiscount.toStringAsFixed(0)}% (${Formatters.currency(cart.percentDiscountAmount)})" : ""}'
-                                '${cart.percentageDiscount > 0 && cart.flatDiscount > 0 ? " + " : ""}'
-                                '${cart.flatDiscount > 0 ? "${Formatters.currency(cart.flatDiscount)} flat" : ""}',
-                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          'Net: ${Formatters.currency((cart.subtotal - cart.manualDiscount).clamp(0.0, double.infinity))}',
-                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.textPrimary),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Step Navigation Controls
-          Row(
-            children: [
-              OutlinedButton.icon(
-                icon: const Icon(Icons.arrow_back, size: 18),
-                label: const Text('Back to Items'),
-                onPressed: () => setState(() => _currentStep = 0),
-              ),
-              const Spacer(),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-                label: const Text('Proceed to Payment'),
-                onPressed: () => setState(() => _currentStep = 2),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPercentChip(String label, double percent) {
-    return ActionChip(
-      label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-      backgroundColor: AppColors.surfaceVariant,
-      visualDensity: VisualDensity.compact,
-      onPressed: () {
-        _percentDiscountCtrl.text = percent > 0 ? (percent % 1 == 0 ? percent.toInt().toString() : percent.toString()) : '';
-        ref.read(cartProvider.notifier).setPercentageDiscount(percent);
-      },
-    );
-  }
-
-  Widget _buildFlatChip(String label, double amount) {
-    return ActionChip(
-      label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-      backgroundColor: AppColors.surfaceVariant,
-      visualDensity: VisualDensity.compact,
-      onPressed: () {
-        _flatDiscountCtrl.text = amount > 0 ? (amount % 1 == 0 ? amount.toInt().toString() : amount.toStringAsFixed(2)) : '';
-        ref.read(cartProvider.notifier).setFlatDiscount(amount);
-      },
-    );
-  }
-
-  // ==========================================
-  // STEP 3: Payment Collection & Finalize
-  // ==========================================
-  Widget _buildStep3PaymentSettlement(CartState cart) {
-    final settings = ref.watch(settingsProvider).value ?? AllSettings(
-          shop: ShopSettings(),
-          billing: BillingSettings(),
-          loyalty: LoyaltySettings(),
-        );
-
-    final loyaltyRules = ref.watch(loyaltyRulesProvider).value ?? [];
-    final loyaltyDiscount = cart.calculateLoyaltyDiscount(settings.loyalty, loyaltyRules);
-    final subtotalAfterDiscount = (cart.subtotal - cart.manualDiscount - loyaltyDiscount).clamp(0.0, double.infinity);
-    final gstAmount = cart.calculateGst(settings.billing, subtotalAfterDiscount);
-    final roundingResult = cart.getRoundingResult(loyaltyDiscount, gstAmount: gstAmount);
-    final grandTotal = roundingResult.roundedTotal;
-
-    final cash = double.tryParse(_cashCtrl.text) ?? 0.0;
-    final upi = double.tryParse(_upiCtrl.text) ?? 0.0;
-    final totalTendered = (_selectedPaymentMode == 'Cash' && cash == 0 && upi == 0) ? grandTotal : (cash + upi);
-    final changeDue = (totalTendered - grandTotal).clamp(0.0, double.infinity);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Customer Overview Banner in Step 3
-          if (cart.selectedCustomer != null) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.pastelMint,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.person, color: AppColors.deepMint, size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          cart.selectedCustomer!.name,
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.textPrimary),
-                        ),
-                        Text(
-                          'Loyalty: ${cart.selectedCustomer!.loyaltyPoints.toInt()} pts${cart.pointsToRedeem > 0 ? " (${cart.pointsToRedeem.toInt()} redeemed)" : ""}',
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF6D28D9), fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (cart.selectedCustomer!.balanceDue > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEE2E2),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.5)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          const Text('Pending Due', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFFDC2626))),
-                          Text(
-                            Formatters.currency(cart.selectedCustomer!.balanceDue),
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFFDC2626)),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          // Grand Total Summary Card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.secondary,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.secondary.withValues(alpha: 0.2),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Amount Payable', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text('${cart.items.length} Items', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  Formatters.currency(grandTotal),
-                  style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900),
-                ),
-                const Divider(height: 16, color: Colors.white24),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 4,
-                  children: [
-                    Text('Subtotal: ${Formatters.currency(cart.subtotal)}', style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                    if (cart.manualDiscount > 0)
-                      Text('Discount: -${Formatters.currency(cart.manualDiscount)}', style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 11, fontWeight: FontWeight.w700)),
-                    if (loyaltyDiscount > 0)
-                      Text('Loyalty: -${Formatters.currency(loyaltyDiscount)}', style: const TextStyle(color: Color(0xFFC4B5FD), fontSize: 11, fontWeight: FontWeight.w700)),
-                    if (gstAmount > 0)
-                      Text('GST: +${Formatters.currency(gstAmount)}', style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Payment Mode Selector
-          const Text('Select Payment Mode', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: _buildPaymentModeTile('Cash', Icons.money, 'Cash')),
-              const SizedBox(width: 8),
-              Expanded(child: _buildPaymentModeTile('UPI', Icons.qr_code, 'UPI / QR')),
-              const SizedBox(width: 8),
-              Expanded(child: _buildPaymentModeTile('Credit', Icons.account_balance_wallet, 'Due (Udhar)')),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Cash Tender Quick Calculator
-          if (_selectedPaymentMode == 'Cash' || _selectedPaymentMode == 'Split') ...[
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: AppTheme.tactileCardDecoration(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _cashCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Cash Tendered (₹)',
-                      hintText: grandTotal.toStringAsFixed(2),
-                      prefixIcon: const Icon(Icons.payments_outlined, size: 20),
-                    ),
-                    onChanged: (val) => setState(() {}),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    children: [
-                      ActionChip(
-                        label: Text('Exact (${Formatters.currency(grandTotal)})', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                        onPressed: () {
-                          _cashCtrl.text = grandTotal.toStringAsFixed(2);
-                          setState(() {});
-                        },
-                      ),
-                      _buildTenderChip(100),
-                      _buildTenderChip(200),
-                      _buildTenderChip(500),
-                      _buildTenderChip(2000),
-                    ],
-                  ),
-                  if (changeDue > 0) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.pastelMint,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Change to Return:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: AppColors.deepMint)),
-                          Text(Formatters.currency(changeDue), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: AppColors.deepMint)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 24),
-
-          // Action Buttons
-          Row(
-            children: [
-              OutlinedButton.icon(
-                icon: const Icon(Icons.arrow_back, size: 18),
-                label: const Text('Back'),
-                onPressed: () => setState(() => _currentStep = 1),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryEmerald,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  icon: _isProcessing
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.check_circle_outline, size: 20),
-                  label: Text(
-                    _isProcessing ? 'Finalizing...' : 'Complete & Print Bill 🧾',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-                  ),
-                  onPressed: _isProcessing ? null : _handleCheckout,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentModeTile(String modeKey, IconData icon, String label) {
-    final isSelected = _selectedPaymentMode == modeKey;
-    return InkWell(
-      onTap: () => setState(() => _selectedPaymentMode = modeKey),
-      borderRadius: BorderRadius.circular(10),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primaryContainer : Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected ? AppColors.primaryEmerald : AppColors.border,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: isSelected ? AppColors.primaryDark : AppColors.textSecondary, size: 22),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? AppColors.primaryDark : AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTenderChip(double amount) {
-    return ActionChip(
-      label: Text('₹${amount.toInt()}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-      backgroundColor: AppColors.surfaceVariant,
-      onPressed: () {
-        _cashCtrl.text = amount.toStringAsFixed(2);
-        setState(() {});
-      },
-    );
   }
 }

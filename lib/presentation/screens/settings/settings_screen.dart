@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:simplebilling_mobile/core/constants/app_colors.dart';
+import 'package:simplebilling_mobile/core/utils/app_logger.dart';
 import 'package:simplebilling_mobile/core/utils/csv_exporter.dart';
 import 'package:simplebilling_mobile/core/utils/formatters.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
@@ -122,7 +123,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
           _loadingSequences = false;
         });
       }
-    } catch (_) {
+    } catch (e, stack) {
+      AppLogger.error('Error fetching settings sequences and loyalty rules', e, stack);
       if (mounted) {
         setState(() {
           _loadingSequences = false;
@@ -1032,22 +1034,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with SingleTick
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: AppColors.borderCoral, width: 1.5),
             ),
-            child: ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.pastelCoral,
-                  borderRadius: BorderRadius.circular(10),
+            child: Material(
+              color: Colors.transparent,
+              child: ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.pastelCoral,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.logout_rounded, color: AppColors.deepCoral, size: 20),
                 ),
-                child: const Icon(Icons.logout_rounded, color: AppColors.deepCoral, size: 20),
+                title: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.deepCoral)),
+                subtitle: const Text('Clear local session cache and log out of the POS terminal', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                onTap: () async {
+                  await ApiRepository.signOut();
+                  widget.onSignOut();
+                },
               ),
-              title: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.deepCoral)),
-              subtitle: const Text('Clear local session cache and log out of the POS terminal', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              onTap: () async {
-                await ApiRepository.signOut();
-                widget.onSignOut();
-              },
             ),
           ),
         ],

@@ -40,6 +40,11 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    if (!SupabaseConfig.isInitialized) {
+      setState(() => _errorMsg = 'Cloud backend is not configured. Please set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in .env or --dart-define, or tap "Continue as Guest" below.');
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMsg = null;
@@ -94,82 +99,85 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Brand Logo
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryEmerald,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.primaryEmerald.withValues(alpha: 0.4),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(Icons.point_of_sale, size: 26, color: Colors.white),
-                            ),
-                            const SizedBox(width: 14),
-                            const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('SimpleBilling', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: -0.4)),
-                                Text('Modern POS & ERP Suite', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                              ],
-                            ),
-                          ],
-                        ),
-
-                        // Main Feature Points
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'High-Velocity POS Terminal\n& Customer Credit Ledger',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 32,
-                                height: 1.2,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            _buildFeaturePill(Icons.flash_on_rounded, 'Sub-second POS Checkout & Multi-Step Wizard'),
-                            _buildFeaturePill(Icons.receipt_long_rounded, 'WhatsApp PDF Sharing & 80mm POS Thermal Printing'),
-                            _buildFeaturePill(Icons.account_balance_wallet_rounded, 'Live Customer Dues & Advance Wallet Tracking'),
-                            _buildFeaturePill(Icons.cloud_sync_rounded, 'Offline-First Realtime Synchronization Engine'),
-                          ],
-                        ),
-
-                        // System Version Tag
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white24),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Brand Logo
+                          Row(
                             children: [
-                              Icon(Icons.shield_outlined, color: Colors.white70, size: 14),
-                              SizedBox(width: 6),
-                              Text(
-                                'SimpleBilling v2.4.0 • Enterprise FinTech',
-                                style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700),
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryEmerald,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primaryEmerald.withValues(alpha: 0.4),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(Icons.point_of_sale, size: 26, color: Colors.white),
+                              ),
+                              const SizedBox(width: 14),
+                              const Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('SimpleBilling', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: -0.4)),
+                                  Text('Modern POS & ERP Suite', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                ],
                               ),
                             ],
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 32),
+
+                          // Main Feature Points
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'High-Velocity POS Terminal\n& Customer Credit Ledger',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 32,
+                                  height: 1.2,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              _buildFeaturePill(Icons.flash_on_rounded, 'Sub-second POS Checkout & Multi-Step Wizard'),
+                              _buildFeaturePill(Icons.receipt_long_rounded, 'WhatsApp PDF Sharing & 80mm POS Thermal Printing'),
+                              _buildFeaturePill(Icons.account_balance_wallet_rounded, 'Live Customer Dues & Advance Wallet Tracking'),
+                              _buildFeaturePill(Icons.cloud_sync_rounded, 'Offline-First Realtime Synchronization Engine'),
+                            ],
+                          ),
+                          const SizedBox(height: 32),
+
+                          // System Version Tag
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.white24),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.shield_outlined, color: Colors.white70, size: 14),
+                                SizedBox(width: 6),
+                                Text(
+                                  'SimpleBilling v2.4.0 • Enterprise FinTech',
+                                  style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -297,16 +305,42 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: const Icon(Icons.admin_panel_settings_rounded, size: 24, color: AppColors.primaryDark),
               ),
               const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Merchant Sign In', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary)),
-                  Text('Access POS terminal & register', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                ],
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Merchant Sign In', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: AppColors.textPrimary)),
+                    Text('Access POS terminal & register', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  ],
+                ),
               ),
             ],
           ),
           const SizedBox(height: 20),
+
+          if (!SupabaseConfig.isInitialized) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFCD34D)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.cloud_off_rounded, color: Color(0xFFB45309), size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Cloud backend not configured. You can use the app offline via Guest Mode.',
+                      style: TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           if (_errorMsg != null) ...[
             Container(
@@ -369,7 +403,7 @@ class _LoginScreenState extends State<LoginScreen> {
           SizedBox(
             width: double.infinity,
             height: 48,
-            child: ElevatedButton(
+            child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryEmerald,
                 foregroundColor: Colors.white,
@@ -377,16 +411,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: _isLoading ? null : _handleLogin,
-              child: _isLoading
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text('Sign In to Terminal', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-                        SizedBox(width: 6),
-                        Icon(Icons.arrow_forward_rounded, size: 18),
-                      ],
-                    ),
+              icon: _isLoading
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.arrow_forward_rounded, size: 18),
+              label: const Text('Sign In to Terminal', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
             ),
           ),
 

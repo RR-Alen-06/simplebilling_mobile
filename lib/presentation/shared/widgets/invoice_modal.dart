@@ -4,6 +4,7 @@ import 'package:simplebilling_mobile/core/utils/formatters.dart';
 import 'package:simplebilling_mobile/core/utils/whatsapp_sender.dart';
 import 'package:simplebilling_mobile/data/models/bill_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
+import 'package:simplebilling_mobile/data/services/bluetooth_printer_service.dart';
 import 'package:simplebilling_mobile/presentation/shared/printing/receipt_generator.dart';
 
 class InvoiceModal {
@@ -176,6 +177,24 @@ class InvoiceModal {
                     label: const Text('WhatsApp Text', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
                     onPressed: () {
                       WhatsAppSender.sendInvoice(
+                        bill: bill,
+                        shop: settings.shop,
+                        billing: settings.billing,
+                      );
+                    },
+                  ),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryEmerald,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    icon: const Icon(Icons.bluetooth_connected_rounded, size: 16),
+                    label: const Text('Bluetooth Thermal', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                    onPressed: () {
+                      BluetoothPrinterService.showBluetoothPrinterModal(
+                        context,
                         bill: bill,
                         shop: settings.shop,
                         billing: settings.billing,

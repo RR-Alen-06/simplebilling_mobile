@@ -222,23 +222,26 @@ class _MainShellScreenState extends State<MainShellScreen> {
         color: isSelected ? AppColors.primaryContainer.withValues(alpha: 0.6) : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: ListTile(
-        dense: true,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        leading: Icon(
-          isSelected ? selectedIcon : unselectedIcon,
-          color: isSelected ? AppColors.primaryDark : AppColors.textSecondary,
-          size: 20,
-        ),
-        title: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? AppColors.primaryDark : AppColors.textPrimary,
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
+          dense: true,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          leading: Icon(
+            isSelected ? selectedIcon : unselectedIcon,
+            color: isSelected ? AppColors.primaryDark : AppColors.textSecondary,
+            size: 20,
           ),
+          title: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? AppColors.primaryDark : AppColors.textPrimary,
+            ),
+          ),
+          onTap: () => setState(() => _currentIndex = index),
         ),
-        onTap: () => setState(() => _currentIndex = index),
       ),
     );
   }
@@ -284,14 +287,14 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildDockTab(0, Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
-                    _buildDockTab(2, Icons.receipt_long_outlined, Icons.receipt_long, 'Bills'),
+                    Expanded(child: _buildDockTab(0, Icons.dashboard_outlined, Icons.dashboard, 'Dashboard')),
+                    Expanded(child: _buildDockTab(2, Icons.receipt_long_outlined, Icons.receipt_long, 'Bills')),
                     
                     // Elevated Center POS Quick Trigger
                     _buildCenterPosTrigger(),
 
-                    _buildDockTab(3, Icons.payments_outlined, Icons.payments, 'Payments'),
-                    _buildDockMoreTrigger(),
+                    Expanded(child: _buildDockTab(3, Icons.payments_outlined, Icons.payments, 'Payments')),
+                    Expanded(child: _buildDockMoreTrigger()),
                   ],
                 ),
               ),
@@ -308,28 +311,28 @@ class _MainShellScreenState extends State<MainShellScreen> {
       onTap: () => setState(() => _currentIndex = index),
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: isSelected ? AppColors.primaryContainer : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 isSelected ? selectedIcon : unselectedIcon,
                 color: isSelected ? AppColors.primaryDark : AppColors.textSecondary,
-                size: 20,
+                size: 19,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 9.5,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                 color: isSelected ? AppColors.primaryDark : AppColors.textSecondary,
               ),
@@ -345,8 +348,8 @@ class _MainShellScreenState extends State<MainShellScreen> {
     return GestureDetector(
       onTap: () => setState(() => _currentIndex = 1),
       child: Container(
-        width: 52,
-        height: 52,
+        width: 50,
+        height: 50,
         decoration: BoxDecoration(
           color: AppColors.primaryEmerald,
           shape: BoxShape.circle,
@@ -373,7 +376,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
         child: const Icon(
           Icons.point_of_sale,
           color: Colors.white,
-          size: 26,
+          size: 25,
         ),
       ),
     );
@@ -385,28 +388,28 @@ class _MainShellScreenState extends State<MainShellScreen> {
       onTap: () => _showMoreOptionsSheet(context),
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: isMoreSelected ? AppColors.primaryContainer : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 Icons.grid_view_rounded,
                 color: isMoreSelected ? AppColors.primaryDark : AppColors.textSecondary,
-                size: 20,
+                size: 19,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               'More',
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 9.5,
                 fontWeight: isMoreSelected ? FontWeight.w800 : FontWeight.w600,
                 color: isMoreSelected ? AppColors.primaryDark : AppColors.textSecondary,
               ),
@@ -535,24 +538,27 @@ class _MainShellScreenState extends State<MainShellScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border, width: 1),
       ),
-      child: ListTile(
-        dense: true,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        leading: Container(
-          padding: const EdgeInsets.all(7),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(9),
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
+          dense: true,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          leading: Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
           ),
-          child: Icon(icon, color: iconColor, size: 20),
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textPrimary)),
+          subtitle: Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+          trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 18),
+          onTap: () {
+            Navigator.pop(ctx);
+            setState(() => _currentIndex = index);
+          },
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textPrimary)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-        trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 18),
-        onTap: () {
-          Navigator.pop(ctx);
-          setState(() => _currentIndex = index);
-        },
       ),
     );
   }
