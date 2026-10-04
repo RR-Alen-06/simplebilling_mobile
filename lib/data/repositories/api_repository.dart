@@ -1,6 +1,6 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import 'package:simplebilling_mobile/core/network/supabase_client.dart';
 import 'package:simplebilling_mobile/core/utils/app_logger.dart';
 import 'package:simplebilling_mobile/core/utils/customer_calculator.dart';
@@ -16,11 +16,25 @@ import 'package:simplebilling_mobile/data/models/product_model.dart';
 import 'package:simplebilling_mobile/data/models/settings_model.dart';
 
 class ApiRepository {
-  static final SupabaseClient _client = SupabaseConfig.client;
-  static SupabaseClient get client => _client;
+  static SupabaseClient get _client => SupabaseConfig.client;
+  static SupabaseClient get client => SupabaseConfig.client;
+  static String? get _currentUserId {
+    if (!SupabaseConfig.isInitialized) return null;
+    try {
+      return _client.auth.currentUser?.id;
+    } catch (e, stack) {
+      AppLogger.warn('Error reading currentUser id', e, stack);
+      return null;
+    }
+  }
 
   // --- ATOMIC SEQUENCE GENERATOR (ALIGNED WITH POSTGRES RPC & WEB APP) ---
   static Future<String> getNextSequence(String key) async {
+    if (!SupabaseConfig.isInitialized) {
+      final shortUuid = const Uuid().v4().substring(0, 8).toUpperCase();
+      final pfx = key.substring(0, key.length < 3 ? key.length : 3).toUpperCase();
+      return 'OFFLINE-$pfx-$shortUuid';
+    }
 
     try {
       final res = await _client.rpc(
@@ -31,7 +45,7 @@ class ApiRepository {
         return res.toString();
       }
     } catch (e, stack) {
-      AppLogger.warn('RPC get_next_sequence failed, falling back', e, stack);
+      AppLogger.warn('RPC get_next_sequence failed, falling back to table upsert', e, stack);
     }
 
     try {
@@ -51,25 +65,25 @@ class ApiRepository {
           ? (seqRes['current_val'] as num).toInt() + 1
           : 1;
 
-      await _client.from('sequences').upsert({
+      final Map<String, dynamic> seqData = {
         'key': key.toUpperCase(),
         'prefix': prefix,
         'padding': padding,
         'current_val': nextVal,
         'updated_at': DateTime.now().toIso8601String(),
-      });
+      };
+      if (_currentUserId != null) {
+        seqData['user_id'] = _currentUserId;
+      }
+
+      await _client.from('sequences').upsert(seqData);
 
       return '$prefix-${nextVal.toString().padLeft(padding, '0')}';
     } catch (e, stack) {
-      AppLogger.warn('Sequence fallback to timestamp', e, stack);
-      // Fallback timestamp code when offline or no permission
-      final suffix = DateTime.now().millisecondsSinceEpoch.toString().substring(
-        7,
-      );
-      final pfx = key
-          .substring(0, key.length < 3 ? key.length : 3)
-          .toUpperCase();
-      return '$pfx-$suffix';
+      AppLogger.warn('Sequence table update failed, generating offline UUID sequence fallback', e, stack);
+      final shortUuid = const Uuid().v4().substring(0, 8).toUpperCase();
+      final pfx = key.substring(0, key.length < 3 ? key.length : 3).toUpperCase();
+      return 'OFFLINE-$pfx-$shortUuid';
     }
   }
 
@@ -78,7 +92,7 @@ class ApiRepository {
     try {
       final prefs = await SharedPreferences.getInstance();
       final keys = prefs.getKeys();
-      final uid = _client.auth.currentUser?.id;
+      final uid = _currentUserId;
       if (uid != null) {
         for (final k in keys) {
           if (k.startsWith('printpro-state:$uid')) {
@@ -86,15 +100,18 @@ class ApiRepository {
           }
         }
       }
-      await _client.auth.signOut();
+      if (SupabaseConfig.isInitialized) {
+        await _client.auth.signOut();
+      }
     } catch (e, stack) {
       AppLogger.error('Error signing out', e, stack);
+      rethrow;
     }
   }
 
   // --- CUSTOMERS & RUNNING DUES LEDGER ---
   static Future<List<CustomerModel>> getCustomers() async {
-
+    if (!SupabaseConfig.isInitialized) return [];
 
     try {
       final response = await _client
@@ -106,12 +123,12 @@ class ApiRepository {
           .toList();
     } catch (e, stack) {
       AppLogger.error('Error fetching customers', e, stack);
-      return [];
+      rethrow;
     }
   }
 
   static Future<List<CustomerModel>> getCustomerSummaries() async {
-
+    if (!SupabaseConfig.isInitialized) return [];
 
     try {
       final customers = await getCustomers();
@@ -141,12 +158,12 @@ class ApiRepository {
       }).toList();
     } catch (e, stack) {
       AppLogger.error('Error calculating customer summaries', e, stack);
-      return getCustomers();
+      rethrow;
     }
   }
 
   static Future<CustomerModel?> getCustomer(String id) async {
-
+    if (!SupabaseConfig.isInitialized) return null;
 
     try {
       final res = await _client.from('customers').select('*').eq('id', id).maybeSingle();
@@ -165,13 +182,13 @@ class ApiRepository {
         directPayments: paymentsList.where((p) => p['bill_id'] == null),
       );
     } catch (e, stack) {
-      AppLogger.error('Error getting customer', e, stack);
-      return null;
+      AppLogger.error('Error getting customer $id', e, stack);
+      rethrow;
     }
   }
 
   static Future<List<CustomerLedgerEntry>> getCustomerLedger(String customerId) async {
-
+    if (!SupabaseConfig.isInitialized) return [];
 
     try {
       final billsRes = await _client.from('bills').select('*').eq('customer_id', customerId).order('created_at', ascending: true);
@@ -247,9 +264,9 @@ class ApiRepository {
       }
 
       return entries;
-    } catch (e) {
-      debugPrint('Error getting customer ledger: $e');
-      return [];
+    } catch (e, stack) {
+      AppLogger.error('Error getting customer ledger for $customerId', e, stack);
+      rethrow;
     }
   }
 
@@ -259,20 +276,43 @@ class ApiRepository {
     required String paymentMode,
     String? notes,
   }) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized. Connect backend to record customer payments.');
+    }
 
     try {
       final paymentNumber = await getNextSequence('PAYMENT');
 
-      // 1. Insert into payments table
-      await _client.from('payments').insert({
+      // Attempt Atomic Postgres Function first
+      try {
+        final rpcRes = await _client.rpc('record_customer_payment_atomic', params: {
+          'p_payment_number': paymentNumber,
+          'p_customer_id': customerId,
+          'p_amount': amount,
+          'p_payment_method': paymentMode,
+          'p_notes': notes ?? 'Credit settlement collection',
+          'p_user_id': _currentUserId,
+        });
+        if (rpcRes != null) {
+          return true;
+        }
+      } catch (e, stack) {
+        AppLogger.warn('RPC record_customer_payment_atomic failed, executing fallback client workflow', e, stack);
+      }
+
+      // 1. Insert into payments table with user_id
+      final Map<String, dynamic> paymentData = {
         'payment_number': paymentNumber,
         'customer_id': customerId,
         'amount': amount,
         'payment_method': paymentMode,
         'notes': notes ?? 'Credit settlement collection',
         'created_at': DateTime.now().toIso8601String(),
-      });
+      };
+      if (_currentUserId != null) {
+        paymentData['user_id'] = _currentUserId;
+      }
+      await _client.from('payments').insert(paymentData);
 
       // 2. Fetch unpaid bills in chronological order
       final unpaidBillsRes = await _client
@@ -329,15 +369,15 @@ class ApiRepository {
       );
 
       return true;
-    } catch (e) {
-      debugPrint('Error recording customer payment: $e');
-      return false;
+    } catch (e, stack) {
+      AppLogger.error('Error recording customer payment', e, stack);
+      rethrow;
     }
   }
 
   // --- PAYMENTS LIST ---
   static Future<List<PaymentModel>> getPayments() async {
-
+    if (!SupabaseConfig.isInitialized) return [];
 
     try {
       final response = await _client
@@ -354,7 +394,7 @@ class ApiRepository {
       }).toList();
     } catch (e, stack) {
       AppLogger.error('Error fetching payments', e, stack);
-      return [];
+      rethrow;
     }
   }
 
@@ -364,7 +404,9 @@ class ApiRepository {
     required String reason,
     required String adminPin,
   }) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       final billRes = await _client.from('bills').select('*').eq('id', billId).single();
@@ -388,9 +430,9 @@ class ApiRepository {
         newValue: 'Discount: ₹$newDiscount, Total: ₹$grandTotal, Reason: $reason (PIN Verified)',
       );
       return true;
-    } catch (e) {
-      debugPrint('Error updating bill discount: $e');
-      return false;
+    } catch (e, stack) {
+      AppLogger.error('Error updating bill discount', e, stack);
+      rethrow;
     }
   }
 
@@ -400,20 +442,27 @@ class ApiRepository {
     String? email,
     double initialAdvance = 0.0,
   }) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       final customerCode = await getNextSequence('CUSTOMER');
+      final Map<String, dynamic> insertData = {
+        'customer_code': customerCode,
+        'name': name,
+        'mobile': mobile,
+        'email': email,
+        'advance_balance': initialAdvance,
+        'loyalty_points': 0.0,
+      };
+      if (_currentUserId != null) {
+        insertData['user_id'] = _currentUserId;
+      }
+
       final response = await _client
           .from('customers')
-          .insert({
-            'customer_code': customerCode,
-            'name': name,
-            'mobile': mobile,
-            'email': email,
-            'advance_balance': initialAdvance,
-            'loyalty_points': 0.0,
-          })
+          .insert(insertData)
           .select()
           .single();
 
@@ -423,9 +472,9 @@ class ApiRepository {
         newValue: 'Advance: $initialAdvance',
       );
       return CustomerModel.fromJson(response);
-    } catch (e) {
-      debugPrint('Error creating customer: $e');
-      return null;
+    } catch (e, stack) {
+      AppLogger.error('Error creating customer $name', e, stack);
+      rethrow;
     }
   }
 
@@ -435,7 +484,9 @@ class ApiRepository {
     String? mobile,
     String? email,
   }) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       await _client
@@ -445,28 +496,30 @@ class ApiRepository {
 
       await logAudit(action: 'UPDATE_CUSTOMER', entity: 'Customer $name');
       return true;
-    } catch (e) {
-      debugPrint('Error updating customer: $e');
-      return false;
+    } catch (e, stack) {
+      AppLogger.error('Error updating customer $id', e, stack);
+      rethrow;
     }
   }
 
   static Future<bool> deleteCustomer(String id) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       await _client.from('customers').delete().eq('id', id);
       await logAudit(action: 'DELETE_CUSTOMER', entity: 'Customer ID $id');
       return true;
-    } catch (e) {
-      debugPrint('Error deleting customer: $e');
-      return false;
+    } catch (e, stack) {
+      AppLogger.error('Error deleting customer $id', e, stack);
+      rethrow;
     }
   }
 
   // --- PRODUCTS ---
   static Future<List<ProductModel>> getProducts() async {
-
+    if (!SupabaseConfig.isInitialized) return [];
 
     try {
       final response = await _client
@@ -476,9 +529,9 @@ class ApiRepository {
       return (response as List)
           .map((json) => ProductModel.fromJson(json))
           .toList();
-    } catch (e) {
-      debugPrint('Error fetching products: $e');
-      return [];
+    } catch (e, stack) {
+      AppLogger.error('Error fetching products', e, stack);
+      rethrow;
     }
   }
 
@@ -488,18 +541,25 @@ class ApiRepository {
     double price, {
     String? productCode,
   }) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       final code = productCode ?? await getNextSequence('PRODUCT');
+      final Map<String, dynamic> insertData = {
+        'product_code': code,
+        'name': name,
+        'category': category,
+        'price': price,
+      };
+      if (_currentUserId != null) {
+        insertData['user_id'] = _currentUserId;
+      }
+
       final response = await _client
           .from('products')
-          .insert({
-            'product_code': code,
-            'name': name,
-            'category': category,
-            'price': price,
-          })
+          .insert(insertData)
           .select()
           .single();
 
@@ -509,22 +569,24 @@ class ApiRepository {
         newValue: 'Price: $price',
       );
       return ProductModel.fromJson(response);
-    } catch (e) {
-      debugPrint('Error creating product: $e');
-      return null;
+    } catch (e, stack) {
+      AppLogger.error('Error creating product $name', e, stack);
+      rethrow;
     }
   }
 
   static Future<bool> deleteProduct(String id) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       await _client.from('products').delete().eq('id', id);
       await logAudit(action: 'DELETE_PRODUCT', entity: 'Product ID $id');
       return true;
-    } catch (e) {
-      debugPrint('Error deleting product: $e');
-      return false;
+    } catch (e, stack) {
+      AppLogger.error('Error deleting product $id', e, stack);
+      rethrow;
     }
   }
 
@@ -535,7 +597,9 @@ class ApiRepository {
     required double price,
     String? productCode,
   }) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       final updates = <String, dynamic>{
@@ -554,15 +618,15 @@ class ApiRepository {
         newValue: 'Category: $category, Price: $price',
       );
       return true;
-    } catch (e) {
-      debugPrint('Error updating product: $e');
-      return false;
+    } catch (e, stack) {
+      AppLogger.error('Error updating product $id', e, stack);
+      rethrow;
     }
   }
 
   // --- EXPENSES ---
   static Future<List<ExpenseModel>> getExpenses() async {
-
+    if (!SupabaseConfig.isInitialized) return [];
 
     try {
       final response = await _client
@@ -572,9 +636,9 @@ class ApiRepository {
       return (response as List)
           .map((json) => ExpenseModel.fromJson(json))
           .toList();
-    } catch (e) {
-      debugPrint('Error fetching expenses: $e');
-      return [];
+    } catch (e, stack) {
+      AppLogger.error('Error fetching expenses', e, stack);
+      rethrow;
     }
   }
 
@@ -585,20 +649,27 @@ class ApiRepository {
     String paymentMode = 'Cash',
     String? notes,
   }) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       final expenseNum = await getNextSequence('EXPENSE');
+      final Map<String, dynamic> insertData = {
+        'expense_number': expenseNum,
+        'title': title,
+        'amount': amount,
+        'category': category,
+        'payment_mode': paymentMode,
+        'notes': notes,
+      };
+      if (_currentUserId != null) {
+        insertData['user_id'] = _currentUserId;
+      }
+
       final response = await _client
           .from('expenses')
-          .insert({
-            'expense_number': expenseNum,
-            'title': title,
-            'amount': amount,
-            'category': category,
-            'payment_mode': paymentMode,
-            'notes': notes,
-          })
+          .insert(insertData)
           .select()
           .single();
 
@@ -608,28 +679,30 @@ class ApiRepository {
         newValue: 'Amount: $amount ($paymentMode)',
       );
       return ExpenseModel.fromJson(response);
-    } catch (e) {
-      debugPrint('Error creating expense: $e');
-      return null;
+    } catch (e, stack) {
+      AppLogger.error('Error creating expense $title', e, stack);
+      rethrow;
     }
   }
 
   static Future<bool> deleteExpense(String id) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       await _client.from('expenses').delete().eq('id', id);
       await logAudit(action: 'DELETE_EXPENSE', entity: 'Expense ID $id');
       return true;
-    } catch (e) {
-      debugPrint('Error deleting expense: $e');
-      return false;
+    } catch (e, stack) {
+      AppLogger.error('Error deleting expense $id', e, stack);
+      rethrow;
     }
   }
 
   // --- AUDIT LOGS ---
   static Future<List<AuditLogModel>> getAuditLogs() async {
-
+    if (!SupabaseConfig.isInitialized) return [];
 
     try {
       final response = await _client
@@ -640,9 +713,9 @@ class ApiRepository {
       return (response as List)
           .map((json) => AuditLogModel.fromJson(json))
           .toList();
-    } catch (e) {
-      debugPrint('Error fetching audit logs: $e');
-      return [];
+    } catch (e, stack) {
+      AppLogger.error('Error fetching audit logs', e, stack);
+      rethrow;
     }
   }
 
@@ -651,25 +724,31 @@ class ApiRepository {
     required String entity,
     String? newValue,
   }) async {
-
+    if (!SupabaseConfig.isInitialized) return;
 
     try {
       final user = _client.auth.currentUser;
       final auditNumber = await getNextSequence('AUDIT');
-      await _client.from('audit_logs').insert({
+      final Map<String, dynamic> auditData = {
         'audit_number': auditNumber,
         'user_name': user?.email ?? 'Mobile App User',
         'action': action,
         'entity': entity,
         'new_value': newValue,
-      });
-    } catch (e) {
-      debugPrint('Audit logging failed: $e');
+      };
+      if (_currentUserId != null) {
+        auditData['user_id'] = _currentUserId;
+      }
+      await _client.from('audit_logs').insert(auditData);
+    } catch (e, stack) {
+      AppLogger.warn('Audit logging failed', e, stack);
     }
   }
 
   // --- DYNAMIC LOYALTY FULL PAYMENT UNLOCK & REVERSALS ---
   static Future<double> processBillFullPaymentLoyalty(String billId) async {
+    if (!SupabaseConfig.isInitialized) return 0.0;
+
     try {
       final billRes = await _client.from('bills').select('*').eq('id', billId).maybeSingle();
       if (billRes == null || billRes['customer_id'] == null) return 0.0;
@@ -693,7 +772,7 @@ class ApiRepository {
       if (pointsEarned <= 0) return 0.0;
 
       final loySeq = await getNextSequence('LOYALTY');
-      await _client.from('loyalty_transactions').insert({
+      final Map<String, dynamic> loyData = {
         'transaction_number': loySeq,
         'customer_id': customerId,
         'bill_id': billId,
@@ -701,7 +780,11 @@ class ApiRepository {
         'type': 'EARN',
         'notes': 'Award Reason: Bill Fully Paid - ${billRes['bill_number'] ?? billId}',
         'created_at': DateTime.now().toIso8601String(),
-      });
+      };
+      if (_currentUserId != null) {
+        loyData['user_id'] = _currentUserId;
+      }
+      await _client.from('loyalty_transactions').insert(loyData);
 
       await _client.from('bills').update({
         'loyalty_points_earned': pointsEarned,
@@ -721,6 +804,8 @@ class ApiRepository {
   }
 
   static Future<double> reverseLoyaltyPointsForBill(String billId, {String userName = 'Admin'}) async {
+    if (!SupabaseConfig.isInitialized) return 0.0;
+
     try {
       final billRes = await _client.from('bills').select('*').eq('id', billId).maybeSingle();
       if (billRes == null || billRes['customer_id'] == null) return 0.0;
@@ -742,7 +827,7 @@ class ApiRepository {
 
       if (totalToReverse > 0) {
         final loySeq = await getNextSequence('LOYALTY');
-        await _client.from('loyalty_transactions').insert({
+        final Map<String, dynamic> loyData = {
           'transaction_number': loySeq,
           'customer_id': customerId,
           'bill_id': billId,
@@ -750,7 +835,11 @@ class ApiRepository {
           'type': 'ADJUST',
           'notes': 'Loyalty Reversal: Bill Cancelled/Refunded (${billRes['bill_number'] ?? billId})',
           'created_at': DateTime.now().toIso8601String(),
-        });
+        };
+        if (_currentUserId != null) {
+          loyData['user_id'] = _currentUserId;
+        }
+        await _client.from('loyalty_transactions').insert(loyData);
 
         final custRes = await _client.from('customers').select('loyalty_points').eq('id', customerId).single();
         final curPts = (custRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
@@ -855,6 +944,8 @@ class ApiRepository {
       ),
     ];
 
+    if (!SupabaseConfig.isInitialized) return defaultRules;
+
     try {
       final response = await _client
           .from('loyalty_rules')
@@ -862,8 +953,8 @@ class ApiRepository {
           .order('sort_order', ascending: true);
       if ((response as List).isEmpty) return defaultRules;
       return response.map((json) => LoyaltyRule.fromJson(json)).toList();
-    } catch (e) {
-      debugPrint('Error fetching loyalty earning rules: $e');
+    } catch (e, stack) {
+      AppLogger.warn('Error fetching loyalty earning rules, returning defaults', e, stack);
       return defaultRules;
     }
   }
@@ -910,6 +1001,8 @@ class ApiRepository {
       ),
     ];
 
+    if (!SupabaseConfig.isInitialized) return defaultRedemption;
+
     try {
       final response = await _client
           .from('loyalty_redemption_rules')
@@ -919,8 +1012,8 @@ class ApiRepository {
       return response
           .map((json) => LoyaltyRedemptionRule.fromJson(json))
           .toList();
-    } catch (e) {
-      debugPrint('Error fetching loyalty redemption rules: $e');
+    } catch (e, stack) {
+      AppLogger.warn('Error fetching loyalty redemption rules, returning defaults', e, stack);
       return defaultRedemption;
     }
   }
@@ -969,7 +1062,11 @@ class ApiRepository {
 
   // --- OFFLINE SYNC PAYLOAD REPLAYS ---
   static Future<void> syncCustomerPayload(Map<String, dynamic> payload) async {
-    await _client.from('customers').insert(payload);
+    final copy = Map<String, dynamic>.from(payload);
+    if (_currentUserId != null && copy['user_id'] == null) {
+      copy['user_id'] = _currentUserId;
+    }
+    await _client.from('customers').insert(copy);
     await logAudit(
       action: 'SYNC_CREATE_CUSTOMER',
       entity: 'Customer ${payload['name'] ?? ''}',
@@ -978,7 +1075,11 @@ class ApiRepository {
   }
 
   static Future<void> syncProductPayload(Map<String, dynamic> payload) async {
-    await _client.from('products').insert(payload);
+    final copy = Map<String, dynamic>.from(payload);
+    if (_currentUserId != null && copy['user_id'] == null) {
+      copy['user_id'] = _currentUserId;
+    }
+    await _client.from('products').insert(copy);
     await logAudit(
       action: 'SYNC_CREATE_PRODUCT',
       entity: 'Product ${payload['name'] ?? ''}',
@@ -987,7 +1088,11 @@ class ApiRepository {
   }
 
   static Future<void> syncExpensePayload(Map<String, dynamic> payload) async {
-    await _client.from('expenses').insert(payload);
+    final copy = Map<String, dynamic>.from(payload);
+    if (_currentUserId != null && copy['user_id'] == null) {
+      copy['user_id'] = _currentUserId;
+    }
+    await _client.from('expenses').insert(copy);
     await logAudit(
       action: 'SYNC_CREATE_EXPENSE',
       entity: payload['title'] ?? 'Expense',
@@ -1000,6 +1105,10 @@ class ApiRepository {
     final itemsPayload = List<Map<String, dynamic>>.from(
       payload['itemsPayload'],
     );
+
+    if (_currentUserId != null && billData['user_id'] == null) {
+      billData['user_id'] = _currentUserId;
+    }
 
     final billRes = await _client
         .from('bills')
@@ -1019,7 +1128,7 @@ class ApiRepository {
 
   // --- BILLS & POS TRANSACTION ENGINE ---
   static Future<List<BillModel>> getBills() async {
-
+    if (!SupabaseConfig.isInitialized) return [];
 
     try {
       final billsData = await _client
@@ -1038,9 +1147,9 @@ class ApiRepository {
           'customer_email': cust?['email'],
         });
       }).toList();
-    } catch (e) {
-      debugPrint('Error fetching bills: $e');
-      return [];
+    } catch (e, stack) {
+      AppLogger.error('Error fetching bills', e, stack);
+      rethrow;
     }
   }
 
@@ -1062,6 +1171,10 @@ class ApiRepository {
     required double loyaltyPointsRedeemed,
     required List<BillItemModel> items,
   }) async {
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized. Connect backend to create bills.');
+    }
+
     try {
       final billNumber = await getNextSequence('BILL');
 
@@ -1097,7 +1210,7 @@ class ApiRepository {
       final isFullyPaidAtCreation = effectivePaidTotal >= grandTotal - 0.01;
       final effectivePointsEarned = isFullyPaidAtCreation ? loyaltyPointsEarned : 0.0;
 
-      final billData = {
+      final billData = <String, dynamic>{
         'bill_number': billNumber,
         'customer_id': customerId,
         'total': total,
@@ -1116,6 +1229,9 @@ class ApiRepository {
         'loyalty_points_earned': effectivePointsEarned,
         'loyalty_points_redeemed': loyaltyPointsRedeemed,
       };
+      if (_currentUserId != null) {
+        billData['user_id'] = _currentUserId;
+      }
 
       final itemsPayload = items
           .map(
@@ -1129,133 +1245,170 @@ class ApiRepository {
           )
           .toList();
 
-      final createdBillId = await syncBillPayload({
-        'billData': billData,
-        'itemsPayload': itemsPayload,
-      });
-
-      // 2. Insert Individual Payments for Cash & UPI for this bill
-      final cashForCurrentBill = (cashPaid - allocatedToPriorBills).clamp(0.0, double.infinity);
-      final remainingAlloc = (allocatedToPriorBills - cashPaid).clamp(0.0, double.infinity);
-      final upiForCurrentBill = (upiPaid - remainingAlloc).clamp(0.0, double.infinity);
-
-      if (cashForCurrentBill > 0) {
-        final pNum = await getNextSequence('PAYMENT');
-        await _client.from('payments').insert({
-          'payment_number': pNum,
-          'customer_id': customerId,
-          'bill_id': createdBillId,
-          'amount': cashForCurrentBill,
-          'payment_method': 'Cash',
-          'notes': 'POS Cash payment for $billNumber',
-          'created_at': DateTime.now().toIso8601String(),
+      // Attempt Atomic Postgres Function first
+      String? createdBillId;
+      try {
+        final rpcRes = await _client.rpc('create_bill_atomic', params: {
+          'p_bill': billData,
+          'p_items': itemsPayload,
+          'p_user_id': _currentUserId,
         });
+        if (rpcRes != null && rpcRes['id'] != null) {
+          createdBillId = rpcRes['id'] as String;
+        }
+      } catch (e, stack) {
+        AppLogger.warn('RPC create_bill_atomic failed, executing fallback client transaction', e, stack);
       }
 
-      if (upiForCurrentBill > 0) {
-        final pNum = await getNextSequence('PAYMENT');
-        await _client.from('payments').insert({
-          'payment_number': pNum,
-          'customer_id': customerId,
-          'bill_id': createdBillId,
-          'amount': upiForCurrentBill,
-          'payment_method': 'UPI',
-          'notes': 'POS UPI payment for $billNumber',
-          'created_at': DateTime.now().toIso8601String(),
+      if (createdBillId == null) {
+        createdBillId = await syncBillPayload({
+          'billData': billData,
+          'itemsPayload': itemsPayload,
         });
-      }
 
-      // 3. Allocate payment surplus to clear customer's prior unpaid bills (FIFO)
-      if (allocatedToPriorBills > 0 && customerId != null) {
-        double remainingToAllocate = allocatedToPriorBills;
-        for (final item in priorUnpaidBillsList) {
-          if (remainingToAllocate <= 0) break;
-          final due = item['due'] as double;
-          final alloc = remainingToAllocate > due ? due : remainingToAllocate;
-          remainingToAllocate -= alloc;
+        // 2. Insert Individual Payments for Cash & UPI for this bill
+        final cashForCurrentBill = (cashPaid - allocatedToPriorBills).clamp(0.0, double.infinity);
+        final remainingAlloc = (allocatedToPriorBills - cashPaid).clamp(0.0, double.infinity);
+        final upiForCurrentBill = (upiPaid - remainingAlloc).clamp(0.0, double.infinity);
 
-          final pb = item['bill'] as Map<String, dynamic>;
-          final newPaidTotal = ((pb['paid_total'] as num?)?.toDouble() ?? 0.0) + alloc;
-
-          await _client.from('bills').update({
-            'paid_total': newPaidTotal,
-          }).eq('id', item['id']);
-
+        if (cashForCurrentBill > 0) {
           final pNum = await getNextSequence('PAYMENT');
-          await _client.from('payments').insert({
+          final Map<String, dynamic> payData = {
             'payment_number': pNum,
             'customer_id': customerId,
-            'bill_id': item['id'],
-            'amount': alloc,
-            'payment_method': upiPaid > cashPaid ? 'UPI' : 'Cash',
-            'notes': 'Automated payment allocation from Bill #$billNumber',
+            'bill_id': createdBillId,
+            'amount': cashForCurrentBill,
+            'payment_method': 'Cash',
+            'notes': 'POS Cash payment for $billNumber',
             'created_at': DateTime.now().toIso8601String(),
-          });
-
-          await processBillFullPaymentLoyalty(item['id'] as String);
+          };
+          if (_currentUserId != null) {
+            payData['user_id'] = _currentUserId;
+          }
+          await _client.from('payments').insert(payData);
         }
-      }
 
-      // 4. Customer Advance / Loyalty Updates & Audit Transactions
-      if (customerId != null) {
-        if (isFullyPaidAtCreation && effectivePointsEarned > 0) {
-          final loySeq = await getNextSequence('LOYALTY');
-          await _client.from('loyalty_transactions').insert({
-            'transaction_number': loySeq,
+        if (upiForCurrentBill > 0) {
+          final pNum = await getNextSequence('PAYMENT');
+          final Map<String, dynamic> payData = {
+            'payment_number': pNum,
             'customer_id': customerId,
             'bill_id': createdBillId,
-            'points': effectivePointsEarned,
-            'type': 'EARN',
-            'notes': 'Award Reason: Bill Fully Paid - $billNumber',
+            'amount': upiForCurrentBill,
+            'payment_method': 'UPI',
+            'notes': 'POS UPI payment for $billNumber',
             'created_at': DateTime.now().toIso8601String(),
-          });
+          };
+          if (_currentUserId != null) {
+            payData['user_id'] = _currentUserId;
+          }
+          await _client.from('payments').insert(payData);
         }
 
-        if (loyaltyPointsRedeemed > 0) {
-          final loySeq = await getNextSequence('LOYALTY');
-          await _client.from('loyalty_transactions').insert({
-            'transaction_number': loySeq,
-            'customer_id': customerId,
-            'bill_id': createdBillId,
-            'points': loyaltyPointsRedeemed,
-            'type': 'REDEEM',
-            'notes': 'Loyalty points redeemed on bill $billNumber',
-            'created_at': DateTime.now().toIso8601String(),
-          });
+        // 3. Allocate payment surplus to clear customer's prior unpaid bills (FIFO)
+        if (allocatedToPriorBills > 0 && customerId != null) {
+          double remainingToAllocate = allocatedToPriorBills;
+          for (final item in priorUnpaidBillsList) {
+            if (remainingToAllocate <= 0) break;
+            final due = item['due'] as double;
+            final alloc = remainingToAllocate > due ? due : remainingToAllocate;
+            remainingToAllocate -= alloc;
+
+            final pb = item['bill'] as Map<String, dynamic>;
+            final newPaidTotal = ((pb['paid_total'] as num?)?.toDouble() ?? 0.0) + alloc;
+
+            await _client.from('bills').update({
+              'paid_total': newPaidTotal,
+            }).eq('id', item['id']);
+
+            final pNum = await getNextSequence('PAYMENT');
+            final Map<String, dynamic> fifoPayData = {
+              'payment_number': pNum,
+              'customer_id': customerId,
+              'bill_id': item['id'],
+              'amount': alloc,
+              'payment_method': upiPaid > cashPaid ? 'UPI' : 'Cash',
+              'notes': 'Automated payment allocation from Bill #$billNumber',
+              'created_at': DateTime.now().toIso8601String(),
+            };
+            if (_currentUserId != null) {
+              fifoPayData['user_id'] = _currentUserId;
+            }
+            await _client.from('payments').insert(fifoPayData);
+
+            await processBillFullPaymentLoyalty(item['id'] as String);
+          }
         }
 
-        final customerRes = await _client
-            .from('customers')
-            .select('advance_balance, loyalty_points')
-            .eq('id', customerId)
-            .single();
-        final currentAdvance =
-            (customerRes['advance_balance'] as num?)?.toDouble() ?? 0.0;
-        final currentLoyalty =
-            (customerRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
+        // 4. Customer Advance / Loyalty Updates & Audit Transactions
+        if (customerId != null) {
+          if (isFullyPaidAtCreation && effectivePointsEarned > 0) {
+            final loySeq = await getNextSequence('LOYALTY');
+            final Map<String, dynamic> loyData = {
+              'transaction_number': loySeq,
+              'customer_id': customerId,
+              'bill_id': createdBillId,
+              'points': effectivePointsEarned,
+              'type': 'EARN',
+              'notes': 'Award Reason: Bill Fully Paid - $billNumber',
+              'created_at': DateTime.now().toIso8601String(),
+            };
+            if (_currentUserId != null) {
+              loyData['user_id'] = _currentUserId;
+            }
+            await _client.from('loyalty_transactions').insert(loyData);
+          }
 
-        final newAdvance = (currentAdvance - advanceUsed + effectiveAdvanceEarned).clamp(
-          0.0,
-          double.infinity,
+          if (loyaltyPointsRedeemed > 0) {
+            final loySeq = await getNextSequence('LOYALTY');
+            final Map<String, dynamic> loyData = {
+              'transaction_number': loySeq,
+              'customer_id': customerId,
+              'bill_id': createdBillId,
+              'points': loyaltyPointsRedeemed,
+              'type': 'REDEEM',
+              'notes': 'Loyalty points redeemed on bill $billNumber',
+              'created_at': DateTime.now().toIso8601String(),
+            };
+            if (_currentUserId != null) {
+              loyData['user_id'] = _currentUserId;
+            }
+            await _client.from('loyalty_transactions').insert(loyData);
+          }
+
+          final customerRes = await _client
+              .from('customers')
+              .select('advance_balance, loyalty_points')
+              .eq('id', customerId)
+              .single();
+          final currentAdvance =
+              (customerRes['advance_balance'] as num?)?.toDouble() ?? 0.0;
+          final currentLoyalty =
+              (customerRes['loyalty_points'] as num?)?.toDouble() ?? 0.0;
+
+          final newAdvance = (currentAdvance - advanceUsed + effectiveAdvanceEarned).clamp(
+            0.0,
+            double.infinity,
+          );
+          final newLoyalty =
+              (currentLoyalty - loyaltyPointsRedeemed + effectivePointsEarned)
+                  .clamp(0.0, double.infinity);
+
+          await _client
+              .from('customers')
+              .update({
+                'advance_balance': newAdvance,
+                'loyalty_points': newLoyalty,
+              })
+              .eq('id', customerId);
+        }
+
+        await logAudit(
+          action: 'CREATE_BILL',
+          entity: billNumber,
+          newValue: 'Grand Total: $grandTotal ($paymentMethod)',
         );
-        final newLoyalty =
-            (currentLoyalty - loyaltyPointsRedeemed + effectivePointsEarned)
-                .clamp(0.0, double.infinity);
-
-        await _client
-            .from('customers')
-            .update({
-              'advance_balance': newAdvance,
-              'loyalty_points': newLoyalty,
-            })
-            .eq('id', customerId);
       }
-
-      await logAudit(
-        action: 'CREATE_BILL',
-        entity: billNumber,
-        newValue: 'Grand Total: $grandTotal ($paymentMethod)',
-      );
 
       return BillModel(
         id: createdBillId,
@@ -1281,7 +1434,7 @@ class ApiRepository {
       );
     } catch (e, stack) {
       AppLogger.error('Error creating bill', e, stack);
-      return null;
+      rethrow;
     }
   }
 
@@ -1292,6 +1445,8 @@ class ApiRepository {
       billing: BillingSettings(),
       loyalty: LoyaltySettings(),
     );
+
+    if (!SupabaseConfig.isInitialized) return defaultSettings;
 
     try {
       final rows = await _client.from('settings').select('*');
@@ -1333,30 +1488,40 @@ class ApiRepository {
         security: SecuritySettings.fromJson(securityMap),
         expenses: ExpenseSettings.fromJson(expensesMap),
       );
-    } catch (e) {
-      debugPrint('Error fetching settings: $e');
+    } catch (e, stack) {
+      AppLogger.warn('Error fetching settings, returning defaults', e, stack);
       return defaultSettings;
     }
   }
 
   static Future<bool> saveSettings(AllSettings settings) async {
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
+
     try {
-      await _client.from('settings').upsert([
+      final List<Map<String, dynamic>> records = [
         {'key': 'shop', 'value': settings.shop.toJson()},
         {'key': 'billing', 'value': settings.billing.toJson()},
         {'key': 'loyalty', 'value': settings.loyalty.toJson()},
         {'key': 'whatsapp', 'value': settings.email.toJson()},
         {'key': 'security', 'value': settings.security.toJson()},
         {'key': 'expenses', 'value': settings.expenses.toJson()},
-      ]);
+      ];
+      if (_currentUserId != null) {
+        for (final r in records) {
+          r['user_id'] = _currentUserId;
+        }
+      }
+      await _client.from('settings').upsert(records);
       await logAudit(
         action: 'UPDATE_SETTINGS',
         entity: 'System & Shop Settings',
       );
       return true;
-    } catch (e) {
-      debugPrint('Error saving settings: $e');
-      return false;
+    } catch (e, stack) {
+      AppLogger.error('Error saving settings', e, stack);
+      rethrow;
     }
   }
 
@@ -1383,7 +1548,9 @@ class ApiRepository {
 
   // --- DASHBOARD METRICS ---
   static Future<DashboardStatsModel> getDashboardStats() async {
-
+    if (!SupabaseConfig.isInitialized) {
+      return DashboardStatsModel.empty();
+    }
 
     try {
       final bills = await getBills();
@@ -1434,9 +1601,9 @@ class ApiRepository {
         billsGenerated: bills.length,
         averageBillValue: averageBillValue,
       );
-    } catch (e) {
-      debugPrint('Error loading dashboard stats: $e');
-      return DashboardStatsModel.empty();
+    } catch (e, stack) {
+      AppLogger.error('Error loading dashboard stats', e, stack);
+      rethrow;
     }
   }
 
@@ -1451,26 +1618,33 @@ class ApiRepository {
       SequenceConfigModel(key: 'AUDIT', prefix: 'AUDIT', padding: 6, currentVal: 1),
     ];
 
+    if (!SupabaseConfig.isInitialized) return defaultConfigs;
+
     try {
       final response = await _client.from('sequences').select('*');
       if ((response as List).isEmpty) return defaultConfigs;
       return response.map((json) => SequenceConfigModel.fromJson(json)).toList();
-    } catch (e) {
-      debugPrint('Error fetching sequence configs: $e');
+    } catch (e, stack) {
+      AppLogger.warn('Error fetching sequence configs, returning defaults', e, stack);
       return defaultConfigs;
     }
   }
 
-
   static Future<bool> saveSequenceConfig(SequenceConfigModel config) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
-      await _client.from('sequences').upsert({
+      final Map<String, dynamic> data = {
         'key': config.key,
         'prefix': config.prefix,
         'padding': config.padding,
-      }, onConflict: 'key');
+      };
+      if (_currentUserId != null) {
+        data['user_id'] = _currentUserId;
+      }
+      await _client.from('sequences').upsert(data, onConflict: 'key');
 
       await logAudit(
         action: 'UPDATE_SEQUENCE_CONFIG',
@@ -1478,18 +1652,24 @@ class ApiRepository {
         newValue: 'Prefix: ${config.prefix}, Padding: ${config.padding}',
       );
       return true;
-    } catch (e) {
-      debugPrint('Error saving sequence config: $e');
-      return false;
+    } catch (e, stack) {
+      AppLogger.error('Error saving sequence config', e, stack);
+      rethrow;
     }
   }
 
   static Future<bool> saveLoyaltyRules(List<LoyaltyRule> rules) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       for (final r in rules) {
-        await _client.from('loyalty_rules').upsert(r.toJson());
+        final Map<String, dynamic> data = r.toJson();
+        if (_currentUserId != null) {
+          data['user_id'] = _currentUserId;
+        }
+        await _client.from('loyalty_rules').upsert(data);
       }
       await logAudit(
         action: 'UPDATE_LOYALTY_EARNING_RULES',
@@ -1497,18 +1677,24 @@ class ApiRepository {
         newValue: '${rules.length} tiers updated',
       );
       return true;
-    } catch (e) {
-      debugPrint('Error saving loyalty rules: $e');
-      return false;
+    } catch (e, stack) {
+      AppLogger.error('Error saving loyalty rules', e, stack);
+      rethrow;
     }
   }
 
   static Future<bool> saveLoyaltyRedemptionRules(List<LoyaltyRedemptionRule> rules) async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       for (final r in rules) {
-        await _client.from('loyalty_redemption_rules').upsert(r.toJson());
+        final Map<String, dynamic> data = r.toJson();
+        if (_currentUserId != null) {
+          data['user_id'] = _currentUserId;
+        }
+        await _client.from('loyalty_redemption_rules').upsert(data);
       }
       await logAudit(
         action: 'UPDATE_LOYALTY_REDEMPTION_RULES',
@@ -1516,15 +1702,17 @@ class ApiRepository {
         newValue: '${rules.length} tiers updated',
       );
       return true;
-    } catch (e) {
-      debugPrint('Error saving loyalty redemption rules: $e');
-      return false;
+    } catch (e, stack) {
+      AppLogger.error('Error saving loyalty redemption rules', e, stack);
+      rethrow;
     }
   }
 
   // --- BACKUP & RESTORE ---
   static Future<Map<String, dynamic>> exportDatabaseBackup() async {
-
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
 
     try {
       final settings = await getSettings();
@@ -1558,19 +1746,23 @@ class ApiRepository {
       );
 
       return backup;
-    } catch (e) {
-      debugPrint('Error exporting database backup: $e');
-      return {};
+    } catch (e, stack) {
+      AppLogger.error('Error exporting database backup', e, stack);
+      rethrow;
     }
   }
 
   // --- HIGH-RISK DATA PURGE ---
   static Future<bool> purgeBusinessData() async {
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not initialized.');
+    }
+
     try {
       try {
         await _client.rpc('purge_business_data');
-      } catch (_) {
-        // Fallback to direct PostgREST deletion matching web API
+      } catch (e, stack) {
+        AppLogger.warn('RPC purge_business_data not available, falling back to direct table deletes', e, stack);
         await _client.from('bill_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         await _client.from('payments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         await _client.from('bills').delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -1587,7 +1779,7 @@ class ApiRepository {
       return true;
     } catch (e, stack) {
       AppLogger.error('Error purging business data', e, stack);
-      return false;
+      rethrow;
     }
   }
 }

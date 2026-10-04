@@ -1,8 +1,8 @@
 # SimpleBilling & PrintPro ERP Mobile App (Flutter)
 
-A native cross-platform Flutter application (iOS, Android, macOS, Windows) for retail billing, Xerox & photocopy centers, customer credit ledgers, and inventory management.
+A native mobile-only Flutter application (**Android + iOS**) for retail billing, Xerox & photocopy centers, customer credit ledgers, and inventory management.
 
-> **Architecture Note**: This mobile repository connects to the shared Supabase PostgreSQL backend used by the SimpleBilling Next.js web application.
+> **Architecture Note**: This mobile repository connects to the shared Supabase PostgreSQL backend used by the SimpleBilling ERP platform.
 
 ---
 
@@ -20,13 +20,13 @@ A native cross-platform Flutter application (iOS, Android, macOS, Windows) for r
                [ Domain & Repository Layer ]
               - CustomerCalculator (Dues & Balances Engine)
               - RoundingEngine (Nearest / Up / Down)
-              - ApiRepository (Supabase Client Gateway)
+              - ApiRepository (Supabase Client Gateway & RPC)
                              │
               ┌──────────────┴──────────────┐
               ▼                             ▼
    [ Supabase PostgreSQL ]         [ SyncQueueManager (Offline) ]
    - Row Level Security (RLS)      - Local SharedPreferences Queue
-   - Atomic Sequence RPC           - Background Retry Engine
+   - Atomic SQL Functions / RPC    - Background Retry Engine
               │
               ▼
    [ RealtimeSyncManager ] ──> [ UI Invalidation & Auto-Refresh ]
@@ -34,7 +34,7 @@ A native cross-platform Flutter application (iOS, Android, macOS, Windows) for r
 
 ---
 
-## 🔐 Environment Variables & Security Setup
+## 🔐 Environment Variables & Configuration
 
 ### Local Development
 Create a `.env` file at the root of the repository (or copy from `.env.example`):
@@ -70,7 +70,7 @@ flutter build apk --release \
    flutter analyze
    ```
 
-4. **Launch application**:
+4. **Launch application (Android emulator / physical device / iOS Simulator)**:
    ```bash
    flutter run
    ```
@@ -79,10 +79,10 @@ flutter build apk --release \
 
 ## 📦 Features & Modules Included
 
-1. **Auth & Security**: Supabase Auth with secure token storage and offline sandbox mode.
+1. **Auth & Security**: Supabase Cloud Auth with secure token storage and offline Guest mode.
 2. **Dashboard**: Today's sales, Monthly sales, Income vs. Expense, Net profit, and Customer debt totals.
 3. **POS Terminal**: Quick Xerox presets, loyalty tier discount calculation, customer advance deduction, and split payment (Cash + UPI).
-4. **Thermal Printing & PDF Invoicing**: Native ESC/POS 58mm/80mm thermal receipt generator and A4 tax invoice PDF layout.
+4. **Thermal Printing & PDF Invoicing**: Direct Bluetooth ESC/POS (58mm/80mm) thermal receipt printing and A4 tax invoice PDF layout.
 5. **Customer Ledger**: Running balance calculations (`totalBilled`, `totalPaid`, `balanceDue`), credit receipts, and consolidated customer statement generation.
 6. **Product Catalog**: Inventory management with category filtering and barcode scanning.
 7. **Expense Tracker**: Operational expense logging with payment mode breakdown.
@@ -91,6 +91,6 @@ flutter build apk --release \
 ---
 
 ## 🛡️ Security & Handoff References
-- [Security Status & RLS Policies](file:///c:/Dev/simplebilling_mobile/security/security-status.md)
-- [Risk Register](file:///c:/Dev/simplebilling_mobile/security/risk-register.md)
-- [Remediation Backlog](file:///c:/Dev/simplebilling_mobile/security/remediation-backlog.md)
+- [Security Status & RLS Policies](security/security-status.md)
+- [Risk Register](security/risk-register.md)
+- [Remediation Backlog](security/remediation-backlog.md)
