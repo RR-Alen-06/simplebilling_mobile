@@ -90,7 +90,26 @@ flutter build apk --release \
 
 ---
 
+## 📁 Project Structure
+
+```text
+simplebilling_mobile/
+├── lib/
+│   ├── core/                  # Theme, constants, routing, and utilities
+│   ├── data/                  # Supabase repositories & offline sync queue
+│   ├── features/              # Feature modules (auth, billing_pos, bills,
+│   │                          #   customers, expenses, payments, products,
+│   │                          #   reports, settings)
+│   ├── presentation/          # Shared UI widgets & layouts
+│   ├── providers/             # Riverpod state providers
+│   └── main.dart              # Application entry point
+├── security/                  # Security status, risk register & remediation docs
+└── test/                      # Unit & widget tests
+```
+
+---
+
 ## 🛡️ Security & Handoff References
-- [Security Status & RLS Policies](file:///c:/Dev/simplebilling_mobile/security/security-status.md)
-- [Risk Register](file:///c:/Dev/simplebilling_mobile/security/risk-register.md)
-- [Remediation Backlog](file:///c:/Dev/simplebilling_mobile/security/remediation-backlog.md)
+- [Security Status & RLS Policies](./security/security-status.md)
+- [Risk Register](./security/risk-register.md)
+- [Remediation Backlog](./security/remediation-backlog.md)
